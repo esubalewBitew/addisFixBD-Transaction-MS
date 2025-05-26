@@ -48,6 +48,7 @@ import { getPublicKey } from "../lib/keyManager";
 import { phoneNumberValidation } from "../config/schema/user.schema";
 import axiosSendSms from "../lib/axios_sendSms";
 import businessDal from "../dal/businessUpdated.dal";
+
 const sendSMS = async (message: any, phonenumber: string) => {
   // kafkaProducer("sendSMS", {
   //   recipient: phonenumber,
@@ -662,9 +663,24 @@ export const unlinkDevice = async (
   }
 };
 
+const fetchUser = async (phoneNumber: string): Promise<any> => {
+  console.log("is phonenumber format is right ==>", phoneNumber.startsWith('+251'));
+  const phonenumbers= phoneNumber.startsWith('+251') ? phoneNumber : '+251'+phoneNumber;
+  const { statusCode: userDalStatusCode, body: userDalBody } = await userDal({
+    method: "get",
+    query: { phoneNumber },
+  });
+  return userDalBody.data;
+};
+
+const checkPassword = async (loginPIN: string, password: string): Promise<boolean> => {
+  return loginPIN === password;
+};
+
 const createUser = async (
   adddata: any
 ): Promise<{ status: number; userdata: any }> => {
+  console.log("create user: ", adddata);
   try {
     const { statusCode: userDalStatusCode, body: userDalBody } = await userDal({
       method: "create",
@@ -1006,13 +1022,6 @@ const accountLookUP = async (
   );
 };
 
-// export function healthCheck(req: Request, res: Response): void {
-//    res.status(200).json({
-//     status: 200,
-//     message: "Auth service is active",
-//   });
-// }
-
 export function healthCheck(req: Request, res: Response): void {
   res.status(200).json({
     status: 200,
@@ -1020,16 +1029,171 @@ export function healthCheck(req: Request, res: Response): void {
   });
 }
 
-export function login(req: Request, res: Response): void {
-  res.status(200).json({
-    status: 200,
-    message: "Hello Welcome to Addis Fix Login Route",
-  });
+// export function login(req: Request, res: Response): Promise<Response> {
+//     console.log("LOGIN...");
+//     console.log("LOGIN Payload", req.body);
+//     const workflow = new EventEmitter();
+//     workflow.on("fetchuser", () => {
+//         console.log("fetchuser");
+//         return res.status(200).json({ status: 200, message: "Hello Welcome to Addis Fix Login Route" });
+//     });
+//     return new Promise((resolve) => {
+//         workflow.emit("fetchuser");
+//     });
+// }
+export async function login(req: Request, res: Response): Promise<Response> {
+  const workflow = new EventEmitter();
+  
+  return new Promise(async (resolve) => {
+      workflow.on("fetchuser", async () => {
+        console.log("fetchuser ==>",req.body);
+        const user = await fetchUser(req.body.phoneNumber);
+        console.log("user ==>",user);
+        if(user){
+          workflow.emit("checkPassword",user);
+        }else{
+          resolve(res.status(400).json({ 
+              status: 400, 
+              message: "User not found" 
+          }));
+        }
+      });
 
-  // app.get('/login', (req: Request, res: Response) => {
-//     res.send('Hello Welcome to Addis Fix Route')
-//   });
+      workflow.on("checkPassword", async (user:any) => {
+        const isPasswordCorrect = await checkPassword(user.loginPIN,req.body.password);
+        console.log("isPasswordCorrect ==>",isPasswordCorrect);
+        const _user = {
+          _id: user._id,
+          fullName: user.fullName,
+          phoneNumber: user.phoneNumber,
+          email: user.email,
+          avatar: user.avatar,
+          role: user.role,
+          permissions: user.permissions,
+          dateJoined: user.dateJoined,
+          lastModified: user.lastModified,
+          enabled: user.enabled,
+          isActive: user.isActive,
+          isLocked: user.isLocked,
+          accesstoken: tempTokenMaker(
+            user,
+            ["set pin", "reset pin", "change pin"],
+            '1234567890abcdef'
+          )
+        };
+        if(isPasswordCorrect){
+          resolve(res.status(200).json({ 
+              status: 200, 
+              message: "You have successfully logged in",
+              data: _user
+            }));
+        }else{
+          resolve(res.status(400).json({ 
+              status: 400, 
+              message: "Password is incorrect" 
+          }));
+      }});
+      workflow.emit("fetchuser");
+  });
 }
+
+export async function register(req: Request, res: Response): Promise<Response> {
+    console.log("REGISTER...");
+    console.log("REGISTER Payload", req.body);
+    let userAddData: any = {
+      userCode: String(performance.now()).split(".").join(""),
+      fullName: req.body.fullname,
+      phoneNumber: utils.formatPhoneNumber(req.body.phoneNumber),
+      avatar: "",
+      email:
+        req.body.email !== undefined && req.body.email !== null
+          ? String(req.body.email).toLowerCase()
+          : "",
+      realm: req.body.realm || "portal",
+      role: req.body.role || "user",
+      teleBirrAccount: req.body.teleBirrAccount || "",
+      mpesaAccount: req.body.mpesaAccount || "",
+      mainAccount: req.body.mainAccount || "",
+      birthDate: req.body.birthDate || "",
+      gender: req.body.gender || "",
+      country: req.body.country || "",
+      region: req.body.region || "",
+      city: req.body.city || "",
+      subCity: req.body.subCity || "",
+      woreda: req.body.woreda || "",
+      houseNo: req.body.houseNo || "",
+      poolSource: req.body.poolSource || "portal",
+      organizationID: req.body.organizationID || "669191919191919191919191",
+      loginPIN: req.body.password || "",
+      // role: {
+      //   _id: new Types.ObjectId(),
+      //   name: "user",
+      //   description: "user",
+      //   realm: "portal",
+      //   permissions: [],
+      // },
+      permissions: [],
+      dateJoined: moment.utc().toISOString(),
+      lastModified: new Date(),
+    };
+
+    let _userresp = await createUser(userAddData);
+      if (_userresp.status === 201) {
+        let user = _userresp.userdata as IUser;
+
+        let _accesstoken = tempTokenMaker(
+          user,
+          ["set pin", "reset pin", "change pin"],
+          '1234567890abcdef'
+        );
+
+        // let accessTokenDecrypted = utils.localDecryptPassword("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjoiMmU3NWZjNWEzN2Q2MTBjMzk5Y2FkNTY2NmIyZmMyMTAwMmU2ZGVjMjkyYTgxYzUyYjU1OTNhODkwZDk3N2EyNTQ4MzJmMDUwNTJkNzU2OGYzYzJlYTgyNDhiOWQyMjUyYjIzZWVhMDkzZjUxNGI2ODQxMWY5YTc2Mjk3YmNkZTA2YjRmZGVhYmQ0NWExOTljYjNhMDQwMmExNjQ3MjY1YzI0NzA3OTU2ZmJlNGUxY2VhMWUyZjU2ZjUxMTU5NzBhNGE2M2YxMWU1ZDg4MzdiYWExNzg3Y2Q2ZmIxZTEyMGZjMmQwZTM1YTRlNTQ3ZjU2MGJiNzk5NmVkZmVkZTkxZmI0MzRhZjE2MWYzNjZiNDFkY2QyMTNhNGZjODdjMGQ0YjBhNmE2ZmZkY2I3ZWY3NmMzYmQwZDE0MGM5ZDhhNGM4NDZmOWE2NDE4YzQ3MTYwOTc4YTQzN2Q2OTEwZWRjY2IwZGQ0ZGI0Y2U1ZGVkMjdjZWI5MzRhMjkzMDIzY2UxZjI4MjRiYzMyZjc1ODgzNTI5Mzg1NTQyNDA3NzY5OGNlYmNhNjMyYjFjMWFjZThlYWVmMWNmZjllOTViNzNiYjVjZTlhNzA3NjcwMjYzMmE4YjkzZTBiNDA4YmFjM2FhMTY3NWRmYjg4NjBhZmZlMjJlYTViMjAwNDQ3MjMwMTg3MzMzZWMyMGE3ZjlhZTI1MTdkYzQxN2RlYzFmZTU5OSIsImlhdCI6MTc0NzIzMTQ5MSwiZXhwIjoxNzQ3MjMxNTUxfQ.7EsGYy9n5H1C_ZI03-ELNvaPOfLZVYJe-cZMlq5VuwQ");
+
+        // console.log("accessTokenDecrypted", accessTokenDecrypted);
+
+        return await new Promise((resolve) => {
+          resolve(
+            res
+              .status(201)
+              .json({ status: 201, message: "User Created Successfully",
+                user: user,
+                accesstoken: _accesstoken
+              })
+          );
+        });
+            // return await new Promise((resolve) => {
+    //   resolve(res.status(200).json({
+    //     status: 200,
+    //     message: "Hello Welcome to Addis Fix Register Route",
+    //   }));
+       // workflow.emit("respond", user);
+      } else {
+        logger.logAXIOS(
+          `Request sent [authentication service]: user registration failed`,
+          "error"
+        );
+        logger.error(
+          `Request sent [authentication service]: user registration failed`
+        );
+        return await new Promise((resolve) => {
+          resolve(
+            res
+              .status(400)
+              .json({ status: 400, message: "please try again later" })
+          );
+        });
+      }
+    // return await new Promise((resolve) => {
+    //   resolve(res.status(200).json({
+    //     status: 200,
+    //     message: "Hello Welcome to Addis Fix Register Route",
+    //   }));
+    // });
+    // res.status(200).json({
+    //   status: 200,
+    //   message: "Hello Welcome to Addis Fix Register Route",
+    // });
+  }
 
 export async function deviceLookUP(
   req: Request,
@@ -1396,7 +1560,7 @@ export async function memberSelfSignupV2(
           { deviceUUID: _deviceuuid },
           // { customerNumber: _account.customer_number },
         ],
-        realm: "member",
+        realm: "portal",
         poolSource: "app",
       } as any;
 
@@ -1455,7 +1619,7 @@ export async function memberSelfSignupV2(
             : "",
         userName: "",
         userBio: "",
-        realm: "member",
+        realm: "portal",
         poolSource: "app",
         permissions: [],
         linkedAccounts: [],
@@ -1704,7 +1868,7 @@ export async function memberSelfSignup(
           { deviceUUID: _deviceuuid },
           // { customerNumber: _account.customer_number },
         ],
-        realm: "member",
+        realm: "portal",
         poolSource: "app",
       } as any;
 
@@ -1765,7 +1929,7 @@ export async function memberSelfSignup(
             : "",
         userName: "",
         userBio: "",
-        realm: "member",
+        realm: "portal",
         poolSource: "app",
         permissions: [],
         linkedAccounts: [],
@@ -1933,7 +2097,7 @@ Dashen Bank – always one step ahead.`;
 export async function userRegister(
   req: Request,
   res: Response
-): Promise<Response> {
+) {
   console.log("DASHBOARD USERREGISTER...");
 
   const _payload = req.body;
@@ -3868,6 +4032,7 @@ export async function forgotPIN(
 export default {
   healthCheck,
   login,
+  register,
   deviceLookUP,
   phoneNumberLookUP,
   memberSelfSignupV2,

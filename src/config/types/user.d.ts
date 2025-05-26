@@ -21,6 +21,14 @@ interface LinkedAccounts {
   CBSAccountData: object
 }
 
+interface Role {
+  _id: Types.ObjectId;
+  name: string;
+  description: string;
+  realm: string;
+  permissions: Types.ObjectId[];
+}
+
 export interface IUser {
   _id: Types.ObjectId;
   userCode: string;
@@ -42,6 +50,7 @@ export interface IUser {
   documentBack?: string;
   photo?: string;
   signature?: string;
+  role: Role;
 
   idNumber?: string;
   residentialStatus?: string;
@@ -75,6 +84,8 @@ export interface IUser {
   linkedAccounts: LinkedAccounts[];
   andOrCustomerNumber: string[];
   mainAccount: string;
+  teleBirrAccount: string;
+  mpesaAccount: string;
   lastMainAccount: string;
   accountLinked: boolean;
   lastAccountLinked: boolean;

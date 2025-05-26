@@ -1,80 +1,58 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import vault from "node-vault";
 import { TopLevelConfig, Vals } from "./types/config";
 import path from "path";
 
-const vaultClient = vault({
-  apiVersion: "v1",
-  endpoint: process.env.VAULT_ADDR,
-  token: process.env.VAULT_TOKEN,
-});
-
-async function loadConfig() {
-  try {
-    const result = await vaultClient.read(process.env.VAULT_PATH_STAGING as string);
-    // console.log("result ", result.data.data);
-
-    return result.data.data;
-  } catch (error) {
-    console.error("Error reading from Vault:", error);
-    throw error;
-  }
-}
-
-const getConfig = (config: Vals): TopLevelConfig => ({
-  // MONGODB_URL: 'mongodb://10.1.15.163/CBEIB-Sandbox-DB',
-  MONGODB_URL: config.MONGODB_URL as string,
+const getConfig = (): TopLevelConfig => ({
+  MONGODB_URL: process.env.MONGODB_URL || 'mongodb://localhost:27017/AddisFix_Db',
 
   _VALS: {
-    SMSSender: config.SMSSender,
+    SMSSender: process.env.SMS_SENDER || 'AddisFix',
 
-    _SESSIONTIMEOUT: config._SESSIONTIMEOUT,
-    _TEMPSESSIONTIMEOUT: config._TEMPSESSIONTIMEOUT,
-    _OTP_SESSIONTIMEOUT: config._OTP_SESSIONTIMEOUT,
-    _OTPEXPIRY: config._OTPEXPIRY,
-    PINEXPIRYDATE: config.PINEXPIRYDATE,
+    _SESSIONTIMEOUT: Number(process.env.SESSION_TIMEOUT) || 30,
+    _TEMPSESSIONTIMEOUT: Number(process.env.TEMP_SESSION_TIMEOUT) || 5,
+    _OTP_SESSIONTIMEOUT: Number(process.env.OTP_SESSION_TIMEOUT) || 5,
+    _OTPEXPIRY: Number(process.env.OTP_EXPIRY) || 5,
+    PINEXPIRYDATE: Number(process.env.PIN_EXPIRY_DATE) || 90,
     
-    docDBCONNString: config.docDBCONNString,
-    docDBNAME: config.docDBNAME,
-    secret: config.secret,
+    docDBCONNString: process.env.DOC_DB_CONN_STRING || '',
+    docDBNAME: process.env.DOC_DB_NAME || '',
+    secret: process.env.SECRET || 'your-secret-key',
     
-    PWDSecretKey: config.PWDSecretKey,
-    PWDiv: config.PWDiv,
+    PWDSecretKey: process.env.PWD_SECRET_KEY || 'your-pwd-secret-key',
+    PWDiv: process.env.PWD_IV || 'your-pwd-iv',
     
-    _JWTSECRET: config._JWTSECRET,
-    _JWTEXPIREY: config._JWTEXPIREY,
-    _REFRESHSECRET: config._REFRESHSECRET,
-    _REFRESHEXPIREY: config._REFRESHEXPIREY,
+    _JWTSECRET: process.env.JWT_SECRET || 'your-jwt-secret',
+    _JWTEXPIREY: Number(process.env.JWT_EXPIRY) || 60,
+    _REFRESHSECRET: process.env.REFRESH_SECRET || 'your-refresh-secret',
+    _REFRESHEXPIREY: Number(process.env.REFRESH_EXPIRY) || 1440,
 
-    DASH_JWTEXPIREY: config.DASH_JWTEXPIREY,
-    APP_JWTEXPIREY: config.APP_JWTEXPIREY,
-    APP_SESSIONEXPIREY: config.APP_SESSIONEXPIREY,
-    DASH_SESSIONEXPIREY: config.DASH_SESSIONEXPIREY,
-    SESSION_THRESHOLD: config.SESSION_THRESHOLD,
-    SESSION_IDLETIME: config.SESSION_IDLETIME,
+    DASH_JWTEXPIREY: Number(process.env.DASH_JWT_EXPIRY) || 60,
+    APP_JWTEXPIREY: Number(process.env.APP_JWT_EXPIRY) || 60,
+    APP_SESSIONEXPIREY: Number(process.env.APP_SESSION_EXPIRY) || 30,
+    DASH_SESSIONEXPIREY: Number(process.env.DASH_SESSION_EXPIRY) || 30,
+    SESSION_THRESHOLD: Number(process.env.SESSION_THRESHOLD) || 5,
+    SESSION_IDLETIME: Number(process.env.SESSION_IDLE_TIME) || 5,
 
-    KAFKA_ADDRESS: config.KAFKA_ADDRESS,
+    KAFKA_ADDRESS: process.env.KAFKA_ADDRESS,
 
     resourcePath: path.resolve(__dirname, "..", "..", "..", "_resources"),
-    baseURL: config.baseURL,
-    PORT: config.PORT_AUTH,
+    baseURL: process.env.BASE_URL || 'http://localhost:3000',
+    PORT: Number(process.env.PORT) || 3000,
+    PORT_AUTH: Number(process.env.PORT_AUTH) || 3000,
 
-    appId: config.appId,
-    bankEmail: config.bankEmail,
-    complyCube_ApiKey: config.complyCube_ApiKey,
+    appId: process.env.APP_ID || 'addisfix',
+    bankEmail: process.env.BANK_EMAIL || 'bank@addisfix.com',
+    complyCube_ApiKey: process.env.COMPLY_CUBE_API_KEY || '',
     
-    BANK_URL: config.BANK_URL,
-    IP: config.IP,
-    PORT_LDAP_NOTIFICATION: config.PORT_LDAP_NOTIFICATION,
-    APPROOVE_SECRET: config.APPROOVE_SECRET,
+    BANK_URL: process.env.BANK_URL || 'http://localhost:8080',
+    IP: process.env.IP || 'localhost',
+    PORT_LDAP_NOTIFICATION: process.env.PORT_LDAP_NOTIFICATION || '389',
+    APPROOVE_SECRET: process.env.APPROOVE_SECRET || 'your-approove-secret',
   },
 });
-async function initConfig(): Promise<TopLevelConfig> {
-  const config = await loadConfig();
-  const initConf = await getConfig(config);
-  return initConf;
-}
 
-export default initConfig;
+// Initialize configuration synchronously
+const config = getConfig();
+export default config;

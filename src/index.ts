@@ -4,7 +4,13 @@ import express, { Request, Response,NextFunction } from 'express';
 // const authenticate = require("./lib/authenticate");
 import { generateToken } from './utils/jwt';
 import  authenticate  from './lib/authenticate';
-const cors = require("cors");
+import config from './config';
+// const cors = require("cors");
+import cors from 'cors';
+
+import mongoDB from "./mongoDB/mongoDB";
+
+global._CONFIG = config;
 
 // import Route from './routes/index.js';
 
@@ -20,6 +26,8 @@ app.use(express.json());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb" }));
 
+mongoDB.connect();
+
 // Function to validate the database connection
 async function validateDBConnection() {
     try {
@@ -30,7 +38,6 @@ async function validateDBConnection() {
       console.log('Database connection is valid');
   
     } catch (error) {
-      // If an error occurs, the database connection is not valid
       console.error('Database connection validation failed:', error);
     }
   }
@@ -76,6 +83,7 @@ async function validateDBConnection() {
       path: [
         "/addisfix/auth/healthcheck",
         "/addisfix/auth/login",
+        "/addisfix/auth/register",
        // "/v1.0/addisfix/auth/devicecheck",
         // "/v1.0/addisfix/auth/phonenumbercheck",
         // "/v1.0/addisfix/auth/phonenumbercheck_v2",

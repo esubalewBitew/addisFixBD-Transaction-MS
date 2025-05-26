@@ -2,10 +2,13 @@ import mongoose from "mongoose";
 import path from "path";
 
 import initConfig from "../config/index";
+import config from "../config/index";
+
+global._CONFIG = config;
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 const connect = async () => {
-  const _CONFIG = await initConfig();
+  // const _CONFIG = await initConfig();
   try {
     mongoose
       .connect(_CONFIG.MONGODB_URL)

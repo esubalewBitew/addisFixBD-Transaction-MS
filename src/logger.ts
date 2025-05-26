@@ -41,19 +41,20 @@ logger.logError = function (message: string): void {
 
 logger.logAXIOS = function (message: string, level: string): void {    
     try {
-        axios.post(
-            // 'http://172.24.15.4:19993/v1.0/chatbirrapi/log/kafka/test', 
-            `http://${global._CONFIG._VALS.IP}:19993/v1.0/chatbirrapi/log/kafka/test`, 
-            {
-                "clientid":"sudperapp-clientid",
-                "topic":"activitylog",
-                "message":`${moment().format('YYYY-MM-DD hh:mm:ss')} ${level}: ${message}`
-            }, {
-            headers: {
-            "Content-Type": `application/json`,
-            },
-            timeout: 60000,
-        });
+        this.log(level, message);
+        // axios.post(
+        //     // 'http://172.24.15.4:19993/v1.0/chatbirrapi/log/kafka/test', 
+        //     `http://${global._CONFIG._VALS.IP}:19993/v1.0/chatbirrapi/log/kafka/test`, 
+        //     {
+        //         "clientid":"sudperapp-clientid",
+        //         "topic":"activitylog",
+        //         "message":`${moment().format('YYYY-MM-DD hh:mm:ss')} ${level}: ${message}`
+        //     }, {
+        //     headers: {
+        //     "Content-Type": `application/json`,
+        //     },
+        //     timeout: 60000,
+        // });
     } catch (error:any) {
         console.log('error making log call', error.message)
     }

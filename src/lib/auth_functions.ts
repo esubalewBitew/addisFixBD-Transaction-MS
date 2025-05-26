@@ -262,17 +262,18 @@ export function tempTokenMaker(
     fullname: user.fullName,
     phonenumber: user.phoneNumber,
     permissions: permissions, //["set pin", "pin login", "confirm login", "verify otp"],
-    userrealm: Object.keys(user).length === 0 ? "member" : user.realm,
+    userrealm: Object.keys(user).length === 0 ? "client" : user.realm,
     fromlinkaccount: Object.keys(user).length === 0 ? true : false,
-    deviceuuid: user.deviceUUID,
+    deviceuuid: user.deviceUUID ?user.deviceUUID :'32423422342',
     sessionexpiry: moment()
       .add(global._CONFIG._VALS._TEMPSESSIONTIMEOUT, "minute")
       .toISOString(),
     publicKey: publicKey,
   };
 
+  console.log("tempTokenMaker _attribs", _attribs);
   let signedToken = jwt.sign(
-    { data: utils.localEncryptPassword(JSON.stringify(_attribs)) },
+    { data: _attribs,},// utils.localEncryptPassword(JSON.stringify(_attribs)) },
     _thissecret,
     {
       ...{ expiresIn: _expiresin },
@@ -284,13 +285,14 @@ export function tempTokenMaker(
   return signedToken;
 }
 
-// export function verifyJwt (token: string, _refresh: boolean): any {
-//   try {
-//     const decoded = jwt.verify(token, _JWTSECRET)
-//     return decoded
-//   } catch (error) {
-//     return null
-//   }
-// };
+export function verifyJwt (token: string, _refresh: boolean): any {
+  const { _JWTSECRET } = global._CONFIG._VALS;
+  try {
+    const decoded = jwt.verify(token, _JWTSECRET)
+    return decoded
+  } catch (error) {
+    return null
+  }
+};
 
 export default { verifyPassword };

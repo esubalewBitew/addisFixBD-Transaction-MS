@@ -19,8 +19,12 @@ let formatPhoneNumber = (phoneNumber: string) => {
 };
 
 let localEncryptPassword = (password: string) => {
-  let PWDSecretKey = global._CONFIG._VALS.PWDSecretKey;
+  let PWDSecretKey = '12345678901234567890123456789012'// global._CONFIG._VALS.PWDSecretKey;
   let PWDiv = global._CONFIG._VALS.PWDiv;
+
+  console.log("PWDSecretKey", PWDSecretKey);
+
+  console.log("PWDiv Password ==>", password);
 
   const cipher = crypto.createCipheriv("aes-256-cbc", PWDSecretKey, PWDiv);
 
@@ -33,7 +37,9 @@ let localEncryptPassword = (password: string) => {
 };
 
 let localDecryptPassword = (encryptedPassword: string) => {
-  let PWDSecretKey = global._CONFIG._VALS.PWDSecretKey;
+
+  console.log("encryptedPassword data", encryptedPassword);
+  let PWDSecretKey = '12345678901234567890123456789012'// global._CONFIG._VALS.PWDSecretKey;
   let PWDiv = global._CONFIG._VALS.PWDiv;
 
   const decipher = crypto.createDecipheriv("aes-256-cbc", PWDSecretKey, PWDiv);

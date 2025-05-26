@@ -80,6 +80,7 @@ interface UserReturn {
  * UserDal function
  */
 export async function userDal(props: UserDalParams): Promise<UserReturn> {
+  console.log("userDal: =====> Received Request  ", props);
   switch (props.method) {
     case "create": {
       const { data } = props;
@@ -98,9 +99,6 @@ export async function userDal(props: UserDalParams): Promise<UserReturn> {
 
     case "get": {
       const { query, projection, options } = props;
-
-      // console.log("#----- user query props ----", props);
-
       return await getUser(query ?? {}, projection, options);
     }
 
@@ -143,14 +141,16 @@ export async function userDal(props: UserDalParams): Promise<UserReturn> {
 }
 
 async function createUser(data: IUser): Promise<UserReturn> {
+  console.log("createUser under dal: =====> Received Request");
   try {
     const user = (await userModel.create(data)).toObject();
-
+    console.log('User Dal Response ===> ',user);
     return {
       statusCode: 201,
       body: { error: null, data: user },
     };
   } catch (err: any) {
+    console.log("createUser under dal: =====> Error", err);
     return {
       statusCode: 500,
       body: {

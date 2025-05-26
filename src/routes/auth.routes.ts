@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 
-import { Router } from "express";
-import { healthCheck, login } from "../controller/auth.controller";
+import { Router,Request, Response } from "express";
+import authController, { healthCheck, login } from "../controller/auth.controller";
 // import authController from "../../controller/auth.controller";
 // import authorization from "../../lib/authorization";
 // import authorizedevice from "../../lib/authorizeddevice";
@@ -24,6 +24,11 @@ router.get(
 router.post(
   "/login",
   login
+);
+
+router.post(
+  "/register",
+  authController.register
 );
 
 // router.get(
