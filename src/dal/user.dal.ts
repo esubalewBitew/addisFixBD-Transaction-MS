@@ -15,6 +15,7 @@ import {
   type UserOptions,
   type UserProjection,
 } from "../config/types/user";
+import Jobs from "../models/jobs.model";
 
 // import utils from "../lib/utils";
 // import { encryptPassword, verifyPassword } from "../lib/auth_functions";
@@ -77,16 +78,18 @@ interface UserReturn {
 }
 
 /**
+ * JobDal function
+/**
  * UserDal function
  */
-export async function userDal(props: UserDalParams): Promise<UserReturn> {
-  console.log("userDal: =====> Received Request  ", props);
+export async function jobDal(props: any): Promise<any> {
+  console.log("jobDal: =====> Received Request  ", props);
   switch (props.method) {
     case "create": {
       const { data } = props;
 
       if (data != null) {
-        return await createUser(data);
+        return await createJob(data);
       } else {
         return {
           statusCode: 400,
@@ -99,7 +102,7 @@ export async function userDal(props: UserDalParams): Promise<UserReturn> {
 
     case "get": {
       const { query, projection, options } = props;
-      return await getUser(query ?? {}, projection, options);
+      return await getJobs(query ?? {}, projection, options);
     }
 
     case "get collection": {
@@ -115,11 +118,30 @@ export async function userDal(props: UserDalParams): Promise<UserReturn> {
     }
 
     case "update": {
+      console.log("Update Job Payload In Dal Update Case ===>", props);
       const { query, options, update } = props;
 
       if (query !== undefined || update !== undefined) {
+        console.log("Update Job Payload In Dal Update Case ===>", query, update);
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        return await updateUser(query!, update!, options);
+        return await updateJobs(query!, update!, options);
+      }
+      return {
+        statusCode: 400,
+        body: {
+          error: "query or update not provided",
+        },
+      };
+    }
+
+    case "delete": {
+      console.log("Delete Job Payload In Dal Update Case ===>", props);
+      const { query, options, update } = props;
+
+      if (query !== undefined || update !== undefined) {
+        console.log("Update Job Payload In Dal Update Case ===>", query, update);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        return await deleteJobs(query!, update!, options);
       }
       return {
         statusCode: 400,
@@ -140,17 +162,17 @@ export async function userDal(props: UserDalParams): Promise<UserReturn> {
   }
 }
 
-async function createUser(data: IUser): Promise<UserReturn> {
-  console.log("createUser under dal: =====> Received Request");
+async function createJob(data: IUser): Promise<UserReturn> {
+  console.log("createJob under dal: =====> Received Request");
   try {
-    const user = (await userModel.create(data)).toObject();
-    console.log('User Dal Response ===> ',user);
+    const job = (await Jobs.create(data)).toObject();
+    console.log('Job Dal Response ===> ',job);
     return {
       statusCode: 201,
-      body: { error: null, data: user },
+      body: { error: null, data: job },
     };
   } catch (err: any) {
-    console.log("createUser under dal: =====> Error", err);
+    console.log("createJob under dal: =====> Error", err);
     return {
       statusCode: 500,
       body: {
@@ -160,18 +182,25 @@ async function createUser(data: IUser): Promise<UserReturn> {
   }
 }
 
-async function getUser(
-  query: UserFilter,
-  projection?: UserProjection,
-  options?: UserOptions
-): Promise<UserReturn> {
+async function getJobs(
+  query: any,
+  projection?: any,
+  options?: any
+): Promise<any> {
   try {
-    const user = await userModel
-      .findOne(query, projection ?? whitelist, options)
+    // const jobData = await Jobs
+    //   .find(query, projection ?? {})
+    //   .lean()
+    //   .populate(population);
+    const jobData = await Jobs
+      .find(query, projection ?? {}) // Remove whitelist, use empty object or specific projection
       .lean()
-      .populate(population);
+      .populate([
+        { path: 'jobCreatedBy', model: 'User', select: 'fullName phoneNumber email' },
+        { path: 'jobAssignedTechnician', model: 'User', select: 'fullName phoneNumber email' }
+      ]); 
 
-    if (user === null) {
+    if (jobData === null) {
       return {
         statusCode: 400,
         body: { error: "user not found" },
@@ -179,7 +208,7 @@ async function getUser(
     } else {
       return {
         statusCode: 200,
-        body: { error: null, data: user },
+        body: { error: null, data: jobData },
       };
     }
   } catch (err: any) {
@@ -253,36 +282,38 @@ async function getPaginate(
   }
 }
 
-async function updateUser(
-  query: UserFilter,
-  update: UserUpdate,
-  options?: UserOptions
-): Promise<UserReturn> {
+async function updateJobs(
+  query: any,
+  update: any,
+  options?: any
+): Promise<any> {
   const opts = {
     new: true,
     select: whitelist,
     ...options,
   };
 
+  console.log("Update Job Payload In Dal ==----===>", { query, update, opts });
+
   try {
-    const user = await userModel
+    const job = await Jobs
       .findOneAndUpdate(query, update, opts)
-      .populate(population)
+      //.populate(population)
       .lean();
 
-    if (user != null) {
+    if (job != null) {
       return {
         statusCode: 200,
         body: {
           error: null,
-          data: user,
+          data: job,
         },
       };
     }
 
     return {
       statusCode: 400,
-      body: { error: "error updating user" },
+      body: { error: "error updating job" },
     };
   } catch (err: any) {
     return {
@@ -294,4 +325,48 @@ async function updateUser(
   }
 }
 
-export default userDal;
+async function deleteJobs(
+  query: any,
+  update: any,
+  options?: any
+): Promise<any> {
+  const opts = {
+    new: true,
+    select: whitelist,
+    ...options,
+  };
+
+  console.log("Delete Job Payload In Dal ==----===>", { query, update, opts });
+
+  try {
+    const job = await Jobs
+      .findOneAndDelete(query, opts)
+      .lean();
+
+    if (job != null) {
+      return {
+        statusCode: 200,
+        body: {
+          error: null,
+          data: {
+            message: "Job deleted successfully",
+          },
+        },
+      };
+    }
+
+    return {
+      statusCode: 400,
+      body: { error: "error updating job" },
+    };
+  } catch (err: any) {
+    return {
+      statusCode: 500,
+      body: {
+        error: err.message,
+      },
+    };
+  }
+}
+
+export default jobDal;

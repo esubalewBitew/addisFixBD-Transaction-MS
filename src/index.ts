@@ -57,63 +57,15 @@ async function validateDBConnection() {
   });
 
 
-
-// app.post('/login', (req: Request, res: Response) => {
-//     const user = { id: 1, name: 'John Doe' };
-//     const token = generateToken(user);
-//     res.json({ token });
-//   });
-
-//   app.get('/profile', authenticate, (req: any, res: Response) => {
-//     res.json({ message: 'Welcome to your profile!', user: req.user });
-//   });
-  
-
-// app.get('/', (req: Request, res: Response) => {
-//   res.send('Hello from Express + TypeScript!');
-// });
-
-// app.get('/login', (req: Request, res: Response) => {
-//     res.send('Hello Welcome to Addis Fix Route')
-//   });
-
   //Free From Guard route
   app.use(
     authenticate().unless({
       path: [
-        "/addisfix/auth/healthcheck",
-        "/addisfix/auth/login",
-        "/addisfix/auth/register",
-       // "/v1.0/addisfix/auth/devicecheck",
-        // "/v1.0/addisfix/auth/phonenumbercheck",
-        // "/v1.0/addisfix/auth/phonenumbercheck_v2",
-        // "/v1.0/addisfix/otp/app/request/merchant/pinops",
-        // "/v1.0/addisfix/otp/app/request/pinops",
-        // "/v1.0/addisfix/otp/dash/request/pinops",
-        // "/v1.0/addisfix/otp/dash/request/dashops",
-        // "/v1.0/addisfix/otp/app/request/agentops",
-        // "/v1.0/addisfix/otp/dash/request/ldapops",
-        // "/v1.0/addisfix/otp/app/request/presignup",
-        // "/v1.0/addisfix/otp/app/request/virtualpresignup",
-        // "/v1.0/addisfix/otp/app/confirm/presignup",
-        // "/v1.0/addisfix/otp/app/confirm/virtualpresignup",
-        // "/v1.0/addisfix/auth/app/prepinops",
-        // "/v1.0/addisfix/auth/app/prepinops_v2",
-        // "/v1.0/addisfix/otp/app/confirm/merchant/pinops",
-        // "/v1.0/addisfix/otp/app/confirm/pinops",
-        // // "/v1.0/addisfix/otp/dash/confirm/dashops",
-        // // "/v1.0/addisfix/auth/app/pinops/merchant/pinlogin",
-        // "/v1.0/addisfix/auth/app/pinops/pinlogin",
-        // "/v1.0/addisfix/location/regions",
-        // "/v1.0/addisfix/auth/signup/selfmember",
-        // "/v1.0/top-hit-counts",
-        // "/v1.0/addisfix/auth/app/kyc/sdktoken",
-        // "/v1.0/addisfix/auth/app/kyc/check/document",
-        // "/v1.0/addisfix/auth/app/kyc/check/identity",
-        // "/v1.0/addisfix/auth/app/kyc/images/download",
-        // "/v1.0/addisfix/auth/merechant/phonenumbercheck_v2",
-        // "/v1.0/addisfix/otp/app/request/pinops_v2",
-        // "/v1.0/addisfix/otp/app/confirm/pinops_v2",
+         "/addisfix/jobs/healthcheck",
+         "/addisfix/jobs/create-job",
+         "/addisfix/jobs/get-jobs",
+         "/addisfix/jobs/update-jobs",
+         "/addisfix/jobs/delete-jobs"
       ],
     })
   );

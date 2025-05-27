@@ -9,7 +9,7 @@ import axios from "axios";
 
 import CustomErrorFunc from "../lib/custom-error";
 
-import userDal from "../dal/user.dal";
+import userDal, { jobDal } from "../dal/user.dal";
 import { type IUser } from "../config/types/user";
 
 import accessListDal from "../dal/accesslist.dal";
@@ -48,6 +48,7 @@ import { getPublicKey } from "../lib/keyManager";
 import { phoneNumberValidation } from "../config/schema/user.schema";
 import axiosSendSms from "../lib/axios_sendSms";
 import businessDal from "../dal/businessUpdated.dal";
+import Jobs from "../models/jobs.model";
 
 const sendSMS = async (message: any, phonenumber: string) => {
   // kafkaProducer("sendSMS", {
@@ -233,8 +234,6 @@ export async function validateDeviceLookUPData(
       deviceUUID: payload.deviceuuid,
       realm: payload.userrealm,
     };
-
-    // console.log("this device lookup query [user]: ", userquery);
 
     const { statusCode: userDalStatusCode, body: userDalBody } = await userDal({
       method: "get",
@@ -526,6 +525,36 @@ const updateUser = async (
   }
 };
 
+const deleteJobsd = async (
+  query: any,
+  updatedata: any
+): Promise<{ status: number; userdata: any }> => {
+  // console.log('this incoming query: ', query)
+
+  try {
+    const { statusCode: jobDalStatusCode, body: jobDalBody } = await jobDal({
+      method: "delete",
+      query: query,
+      update: updatedata,
+    });
+
+    if (jobDalStatusCode === 200) {
+      return {
+        status: 200,
+        userdata: jobDalBody.data,
+      };
+    } else {
+      return {
+        status: 500,
+        userdata: {},
+      };
+    }
+  } catch (error) {
+    console.log(error);
+    return { status: 400, userdata: {} };
+  }
+};
+
 const dropLDAPActions = async (
   query: any,
   updatedata: any
@@ -680,17 +709,17 @@ const checkPassword = async (loginPIN: string, password: string): Promise<boolea
 const createUser = async (
   adddata: any
 ): Promise<{ status: number; userdata: any }> => {
-  console.log("create user: ", adddata);
+  console.log("create Job: ", adddata);
   try {
-    const { statusCode: userDalStatusCode, body: userDalBody } = await userDal({
+    const { statusCode: jobDalStatusCode, body: jobDalBody } = await jobDal({
       method: "create",
       data: adddata,
     });
 
-    if (userDalStatusCode === 201) {
+    if (jobDalStatusCode === 201) {
       return {
         status: 201,
-        userdata: userDalBody.data,
+        userdata: jobDalBody.data,
       };
     } else {
       return {
@@ -702,6 +731,52 @@ const createUser = async (
     console.log(error);
     return { status: 400, userdata: {} };
   }
+};
+
+const fetchJob = async (): Promise<any> => {
+  const { statusCode: jobDalStatusCode, body: jobDalBody } = await jobDal({
+    method: "get",
+  });
+  if (jobDalStatusCode === 200) {
+    return {
+      status: 200,
+      data:jobDalBody.data};
+  } else {
+    return {
+      status: 500,
+      userdata: {},
+    };
+  }
+};
+
+// const updateJobs = async (job: any): Promise<any> => {
+//   console.log("Update Job Payload In Dal ===>", job);
+//   const { statusCode: jobDalStatusCode, body: jobDalBody } = await jobDal({
+//     method: "update",
+//     data: job,
+//   });
+//   return jobDalBody.data;
+// };
+const updateJobs = async (jobId: any, updateData: any): Promise<any> => {
+  console.log("Update Job Payload In Dal ===>", { jobId, updateData });
+  const { statusCode: jobDalStatusCode, body: jobDalBody } = await jobDal({
+    method: "update",
+    query: { _id: jobId },
+    update: updateData,
+    options: { new: true } // Return updated document
+  });
+  return jobDalBody.data;
+};
+
+const deleteJobs = async (jobId: any): Promise<any> => {
+  console.log("Delete Job Payload In Dal ===>", { jobId });
+  const { statusCode: jobDalStatusCode, body: jobDalBody } = await jobDal({
+    method: "delete",
+    query: { _id: jobId },
+    // update: updateData,
+    options: { new: true } // Return updated document
+  });
+  return jobDalBody.data;
 };
 
 const otpExists = async (
@@ -1025,22 +1100,10 @@ const accountLookUP = async (
 export function healthCheck(req: Request, res: Response): void {
   res.status(200).json({
     status: 200,
-    message: "Auth service is active",
+    message: "Jobs service is active ✅",
   });
 }
 
-// export function login(req: Request, res: Response): Promise<Response> {
-//     console.log("LOGIN...");
-//     console.log("LOGIN Payload", req.body);
-//     const workflow = new EventEmitter();
-//     workflow.on("fetchuser", () => {
-//         console.log("fetchuser");
-//         return res.status(200).json({ status: 200, message: "Hello Welcome to Addis Fix Login Route" });
-//     });
-//     return new Promise((resolve) => {
-//         workflow.emit("fetchuser");
-//     });
-// }
 export async function login(req: Request, res: Response): Promise<Response> {
   const workflow = new EventEmitter();
   
@@ -1097,67 +1160,123 @@ export async function login(req: Request, res: Response): Promise<Response> {
   });
 }
 
-export async function register(req: Request, res: Response): Promise<Response> {
-    console.log("REGISTER...");
-    console.log("REGISTER Payload", req.body);
+export async function getJob(req: Request, res: Response): Promise<Response> {
+  console.log("Get Job Payload ===>", req.body);
+  const job = await fetchJob();
+  return res.status(200).json({
+    status: 200,
+    message: "Job fetched successfully",
+    data: job,
+  });
+}
+
+// export async function updateJob(req: Request, res: Response): Promise<Response> {
+//   console.log("Update Job Payload ===>", req.query?.id);
+//   const job = await updateJobs(req.query?.id);
+//   if(job){  
+//     return res.status(200).json({
+//       status: 200,
+//       message: "Job updated successfully",
+//       data: job,
+//     });
+//   }else{
+//     return res.status(400).json({
+//       status: 400,
+//       message: "Job not found",
+//     });
+//   }
+// }
+
+export async function updateJob(req: Request, res: Response): Promise<Response> {
+  console.log("Update Job Payload ===>", req.params.id); // Use req.params.id for path parameter
+  
+  const jobId = req.query.id;
+  const updateData = req.body;
+  
+  const updatedJob = await updateJobs(jobId, updateData);
+
+  if(updatedJob){
+    return res.status(200).json({
+      status: 200,
+      message: "Job updated successfully",
+      data: updatedJob
+    });
+  }else{
+    return res.status(400).json({
+      status: 400,
+      message: "Job not found"
+    });
+  }
+}
+
+export async function deleteJob(req: Request, res: Response): Promise<Response> {
+  console.log("Delete Job Payload ===>", req.params.id); // Use req.params.id for path parameter
+  
+  const jobId = req.query.id;
+  
+  const updatedJob = await deleteJobs(jobId);
+
+  if(updatedJob){
+    return res.status(200).json({
+      status: 200,
+      message: "Job Deleted successfully",
+      data: updatedJob
+    });
+  }else{
+    return res.status(400).json({
+      status: 400,
+      message: "Job not found"
+    });
+  }
+}
+
+export async function createJob(req: Request, res: Response): Promise<Response> {
+    console.log("Create Job Payload ===>", req.body);
     let userAddData: any = {
-      userCode: String(performance.now()).split(".").join(""),
-      fullName: req.body.fullname,
-      phoneNumber: utils.formatPhoneNumber(req.body.phoneNumber),
-      avatar: "",
-      email:
-        req.body.email !== undefined && req.body.email !== null
-          ? String(req.body.email).toLowerCase()
-          : "",
-      realm: req.body.realm || "portal",
-      role: req.body.role || "user",
-      teleBirrAccount: req.body.teleBirrAccount || "",
-      mpesaAccount: req.body.mpesaAccount || "",
-      mainAccount: req.body.mainAccount || "",
-      birthDate: req.body.birthDate || "",
-      gender: req.body.gender || "",
-      country: req.body.country || "",
-      region: req.body.region || "",
-      city: req.body.city || "",
-      subCity: req.body.subCity || "",
-      woreda: req.body.woreda || "",
-      houseNo: req.body.houseNo || "",
-      poolSource: req.body.poolSource || "portal",
-      organizationID: req.body.organizationID || "669191919191919191919191",
-      loginPIN: req.body.password || "",
-      // role: {
-      //   _id: new Types.ObjectId(),
-      //   name: "user",
-      //   description: "user",
-      //   realm: "portal",
-      //   permissions: [],
-      // },
-      permissions: [],
-      dateJoined: moment.utc().toISOString(),
-      lastModified: new Date(),
+      jobCreatedBy: '507f1f77bcf86cd799439011', // Example valid ObjectId
+      jobName: req.body.jobName,
+      jobTitle: req.body.jobName,
+      jobDescription: req.body.jobDescription,
+      jobStatus: req.body.jobStatus,
+      jobType: req.body.jobType,
+      jobPriority: req.body.jobPriority,
+      jobUpdatedAt: req.body.jobUpdatedAt || new Date(),
+      jobCompletedAt: req.body.jobCompletedAt || new Date(),
+      jobDeletedAt: req.body.jobDeletedAt || new Date(),
+      jobCategory: req.body.jobCategory,
+      jobServiceLocation: req.body.jobServiceLocation,
+      jobServiceCategory: req.body.jobServiceCategory,
+      jobServiceExperience: req.body.jobServiceExperience,
+      jobServiceType: req.body.jobServiceType,
+      jobPrice: req.body.jobPrice,
+      jobAdditionalFee: req.body.jobAdditionalFee,
+      jobDeletedBy: req.body.jobDeletedBy,
+      jobUrgencyLevel: req.body.jobUrgencyLevel || "low",
+      jobUrgencyDate: req.body.jobUrgencyDate || new Date(),
+      jobUrgencyTime: req.body.jobUrgencyTime || new Date(),
+      jobServiceSkills: req.body.jobServiceSkills || [],
+      jobAssignedTechnician: req.body.jobAssignedTechnician,
+      jobAssignedTechnicianName: req.body.jobAssignedTechnicianName,
+      jobImages: req.body.jobImages || [],
+      jobCreatedAt: req.body.jobCreatedAt || new Date(),
+      jobLocation: req.body.jobLocation,
+      jobLatitude: req.body.jobLatitude || 0,
+      jobLongitude: req.body.jobLongitude || 0,
+      jobAddress: req.body.jobAddress || "",
+      jobCity: req.body.jobCity || "",
+      jobState: req.body.jobState || "",
     };
 
     let _userresp = await createUser(userAddData);
       if (_userresp.status === 201) {
-        let user = _userresp.userdata as IUser;
-
-        let _accesstoken = tempTokenMaker(
-          user,
-          ["set pin", "reset pin", "change pin"],
-          '1234567890abcdef'
-        );
-
-        // let accessTokenDecrypted = utils.localDecryptPassword("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkYXRhIjoiMmU3NWZjNWEzN2Q2MTBjMzk5Y2FkNTY2NmIyZmMyMTAwMmU2ZGVjMjkyYTgxYzUyYjU1OTNhODkwZDk3N2EyNTQ4MzJmMDUwNTJkNzU2OGYzYzJlYTgyNDhiOWQyMjUyYjIzZWVhMDkzZjUxNGI2ODQxMWY5YTc2Mjk3YmNkZTA2YjRmZGVhYmQ0NWExOTljYjNhMDQwMmExNjQ3MjY1YzI0NzA3OTU2ZmJlNGUxY2VhMWUyZjU2ZjUxMTU5NzBhNGE2M2YxMWU1ZDg4MzdiYWExNzg3Y2Q2ZmIxZTEyMGZjMmQwZTM1YTRlNTQ3ZjU2MGJiNzk5NmVkZmVkZTkxZmI0MzRhZjE2MWYzNjZiNDFkY2QyMTNhNGZjODdjMGQ0YjBhNmE2ZmZkY2I3ZWY3NmMzYmQwZDE0MGM5ZDhhNGM4NDZmOWE2NDE4YzQ3MTYwOTc4YTQzN2Q2OTEwZWRjY2IwZGQ0ZGI0Y2U1ZGVkMjdjZWI5MzRhMjkzMDIzY2UxZjI4MjRiYzMyZjc1ODgzNTI5Mzg1NTQyNDA3NzY5OGNlYmNhNjMyYjFjMWFjZThlYWVmMWNmZjllOTViNzNiYjVjZTlhNzA3NjcwMjYzMmE4YjkzZTBiNDA4YmFjM2FhMTY3NWRmYjg4NjBhZmZlMjJlYTViMjAwNDQ3MjMwMTg3MzMzZWMyMGE3ZjlhZTI1MTdkYzQxN2RlYzFmZTU5OSIsImlhdCI6MTc0NzIzMTQ5MSwiZXhwIjoxNzQ3MjMxNTUxfQ.7EsGYy9n5H1C_ZI03-ELNvaPOfLZVYJe-cZMlq5VuwQ");
-
-        // console.log("accessTokenDecrypted", accessTokenDecrypted);
+        let job = _userresp.userdata as Jobs;
 
         return await new Promise((resolve) => {
           resolve(
             res
               .status(201)
-              .json({ status: 201, message: "User Created Successfully",
-                user: user,
-                accesstoken: _accesstoken
+              .json({ status: 201, message: "Jobs Created Successfully",
+                data: job,
               })
           );
         });
@@ -4032,7 +4151,10 @@ export async function forgotPIN(
 export default {
   healthCheck,
   login,
-  register,
+  createJob,
+  getJob,
+  updateJob,
+  deleteJob,
   deviceLookUP,
   phoneNumberLookUP,
   memberSelfSignupV2,

@@ -4,5 +4,5 @@ import authRoutes from "./auth.routes";
 
 export default function initRoutes(app:any) {
   debug("loading routes");
-  app.use("/addisfix/auth", authRoutes);
+  app.use("/addisfix/jobs", authRoutes);
 };
