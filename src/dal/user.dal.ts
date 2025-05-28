@@ -298,7 +298,10 @@ async function updateJobs(
   try {
     const job = await Jobs
       .findOneAndUpdate(query, update, opts)
-      //.populate(population)
+      .populate([
+        { path: 'jobCreatedBy', model: 'User', select: 'fullName phoneNumber email role' },
+        { path: 'jobAssignedTechnician', model: 'User', select: 'fullName phoneNumber email role occupation' }
+      ])
       .lean();
 
     if (job != null) {
