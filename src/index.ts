@@ -1,23 +1,16 @@
-// src/index.ts
 import express, { Request, Response,NextFunction } from 'express';
 // import {authenticate} from './middlewares/authMiddleware'
 // const authenticate = require("./lib/authenticate");
 import { generateToken } from './utils/jwt';
 import  authenticate  from './lib/authenticate';
 import config from './config';
-// const cors = require("cors");
 import cors from 'cors';
 
 import mongoDB from "./mongoDB/mongoDB";
 
 global._CONFIG = config;
 
-// import Route from './routes/index.js';
-
-//import Route from './routes/index.ts';
 import Router from './routes/index';
-
-
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,8 +24,6 @@ mongoDB.connect();
 // Function to validate the database connection
 async function validateDBConnection() {
     try {
-      // Execute a simple query to check the connectivity
-      //const result = await prismaRead.$queryRaw`SELECT 1`;
   
       // If the query executes successfully, the database connection is valid
       console.log('Database connection is valid');
@@ -61,23 +52,16 @@ async function validateDBConnection() {
   app.use(
     authenticate().unless({
       path: [
-         "/addisfix/jobs/healthcheck",
-         "/addisfix/jobs/create-job",
-         "/addisfix/jobs/get-jobs",
-         "/addisfix/jobs/update-jobs",
-         "/addisfix/jobs/delete-jobs"
+         "/addisfix/services/healthcheck",
+         "/addisfix/services/create-service",
+         "/addisfix/services/get-services",
+         "/addisfix/services/update-services",
+         "/addisfix/services/delete-services"
       ],
     })
   );
 
   Router(app);
-  
-  /**
-   * API Routes
-   */
- // Route(app);
-
-
 
 app.use((req:Request,res:Response, next: NextFunction)=>{
    res.status(404).send('Route not found');

@@ -16,6 +16,7 @@ import {
   type UserProjection,
 } from "../config/types/user";
 import Jobs from "../models/jobs.model";
+import Services from "../models/services.model";
 
 // import utils from "../lib/utils";
 // import { encryptPassword, verifyPassword } from "../lib/auth_functions";
@@ -82,14 +83,14 @@ interface UserReturn {
 /**
  * UserDal function
  */
-export async function jobDal(props: any): Promise<any> {
-  console.log("jobDal: =====> Received Request  ", props);
+  export async function serviceDal(props: any): Promise<any> {
+  console.log("serviceDal: =====> Received Request  ", props);
   switch (props.method) {
     case "create": {
       const { data } = props;
 
       if (data != null) {
-        return await createJob(data);
+        return await createService(data);
       } else {
         return {
           statusCode: 400,
@@ -102,7 +103,7 @@ export async function jobDal(props: any): Promise<any> {
 
     case "get": {
       const { query, projection, options } = props;
-      return await getJobs(query ?? {}, projection, options);
+      return await getServices(query ?? {}, projection, options);
     }
 
     case "get collection": {
@@ -124,7 +125,7 @@ export async function jobDal(props: any): Promise<any> {
       if (query !== undefined || update !== undefined) {
         console.log("Update Job Payload In Dal Update Case ===>", query, update);
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        return await updateJobs(query!, update!, options);
+        return await updateServices(query!, update!, options);
       }
       return {
         statusCode: 400,
@@ -135,13 +136,12 @@ export async function jobDal(props: any): Promise<any> {
     }
 
     case "delete": {
-      console.log("Delete Job Payload In Dal Update Case ===>", props);
+      console.log("Delete Service Payload In Dal Update Case ===>", props);
       const { query, options, update } = props;
 
       if (query !== undefined || update !== undefined) {
-        console.log("Update Job Payload In Dal Update Case ===>", query, update);
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        return await deleteJobs(query!, update!, options);
+        console.log("Update Service Payload In Dal Update Case ===>", query, update);
+        return await deleteServices(query!, update!, options);
       }
       return {
         statusCode: 400,
@@ -162,17 +162,17 @@ export async function jobDal(props: any): Promise<any> {
   }
 }
 
-async function createJob(data: IUser): Promise<UserReturn> {
-  console.log("createJob under dal: =====> Received Request");
+async function createService(data: IUser): Promise<UserReturn> {
+  console.log("createService under dal: =====> Received Request");
   try {
-    const job = (await Jobs.create(data)).toObject();
-    console.log('Job Dal Response ===> ',job);
+    const service = (await Services.create(data)).toObject();
+    console.log('Service Dal Response ===> ',service);
     return {
       statusCode: 201,
-      body: { error: null, data: job },
+      body: { error: null, data: service },
     };
   } catch (err: any) {
-    console.log("createJob under dal: =====> Error", err);
+    console.log("createService under dal: =====> Error", err);
     return {
       statusCode: 500,
       body: {
@@ -182,33 +182,29 @@ async function createJob(data: IUser): Promise<UserReturn> {
   }
 }
 
-async function getJobs(
+async function getServices(
   query: any,
   projection?: any,
   options?: any
 ): Promise<any> {
   try {
-    // const jobData = await Jobs
-    //   .find(query, projection ?? {})
-    //   .lean()
-    //   .populate(population);
-    const jobData = await Jobs
+    const serviceData = await Services
       .find(query, projection ?? {}) // Remove whitelist, use empty object or specific projection
       .lean()
       .populate([
-        { path: 'jobCreatedBy', model: 'User', select: 'fullName phoneNumber email' },
-        { path: 'jobAssignedTechnician', model: 'User', select: 'fullName phoneNumber email' }
+        { path: 'serviceCreatedBy', model: 'User', select: 'fullName phoneNumber email' },
+        { path: 'serviceUpdatedBy', model: 'User', select: 'fullName phoneNumber email' }
       ]); 
 
-    if (jobData === null) {
+    if (serviceData === null) {
       return {
         statusCode: 400,
-        body: { error: "user not found" },
+        body: { error: "Service not found" },
       };
     } else {
       return {
         statusCode: 200,
-        body: { error: null, data: jobData },
+        body: { error: null, data: serviceData },
       };
     }
   } catch (err: any) {
@@ -282,7 +278,7 @@ async function getPaginate(
   }
 }
 
-async function updateJobs(
+async function updateServices(
   query: any,
   update: any,
   options?: any
@@ -296,27 +292,27 @@ async function updateJobs(
   console.log("Update Job Payload In Dal ==----===>", { query, update, opts });
 
   try {
-    const job = await Jobs
+    const service = await Services
       .findOneAndUpdate(query, update, opts)
       .populate([
-        { path: 'jobCreatedBy', model: 'User', select: 'fullName phoneNumber email role' },
-        { path: 'jobAssignedTechnician', model: 'User', select: 'fullName phoneNumber email role occupation' }
+        { path: 'serviceCreatedBy', model: 'User', select: 'fullName phoneNumber email role' },
+        { path: 'serviceUpdatedBy', model: 'User', select: 'fullName phoneNumber email role' }
       ])
       .lean();
 
-    if (job != null) {
+    if (service != null) {
       return {
         statusCode: 200,
         body: {
           error: null,
-          data: job,
+          data: service,
         },
       };
     }
 
     return {
       statusCode: 400,
-      body: { error: "error updating job" },
+      body: { error: "error updating service" },
     };
   } catch (err: any) {
     return {
@@ -328,7 +324,7 @@ async function updateJobs(
   }
 }
 
-async function deleteJobs(
+async function deleteServices(
   query: any,
   update: any,
   options?: any
@@ -339,20 +335,20 @@ async function deleteJobs(
     ...options,
   };
 
-  console.log("Delete Job Payload In Dal ==----===>", { query, update, opts });
+  console.log("Delete Service Payload In Dal ==----===>", { query, update, opts });
 
   try {
-    const job = await Jobs
+    const service = await Services
       .findOneAndDelete(query, opts)
       .lean();
 
-    if (job != null) {
+    if (service != null) {
       return {
         statusCode: 200,
         body: {
           error: null,
           data: {
-            message: "Job deleted successfully",
+            message: "Service deleted successfully",
           },
         },
       };
@@ -372,4 +368,4 @@ async function deleteJobs(
   }
 }
 
-export default jobDal;
+export default serviceDal;

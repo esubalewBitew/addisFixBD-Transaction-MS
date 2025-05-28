@@ -9,7 +9,7 @@ import axios from "axios";
 
 import CustomErrorFunc from "../lib/custom-error";
 
-import userDal, { jobDal } from "../dal/user.dal";
+import userDal, {  serviceDal } from "../dal/user.dal";
 import { type IUser } from "../config/types/user";
 
 import accessListDal from "../dal/accesslist.dal";
@@ -525,23 +525,23 @@ const updateUser = async (
   }
 };
 
-const deleteJobsd = async (
+const deleteJobs = async (
   query: any,
   updatedata: any
 ): Promise<{ status: number; userdata: any }> => {
   // console.log('this incoming query: ', query)
 
   try {
-    const { statusCode: jobDalStatusCode, body: jobDalBody } = await jobDal({
+    const { statusCode: serviceDalStatusCode, body: serviceDalBody } = await serviceDal({
       method: "delete",
       query: query,
       update: updatedata,
     });
 
-    if (jobDalStatusCode === 200) {
+    if (serviceDalStatusCode === 200) {
       return {
         status: 200,
-        userdata: jobDalBody.data,
+        userdata: serviceDalBody.data,
       };
     } else {
       return {
@@ -709,17 +709,17 @@ const checkPassword = async (loginPIN: string, password: string): Promise<boolea
 const createUser = async (
   adddata: any
 ): Promise<{ status: number; userdata: any }> => {
-  console.log("create Job: ", adddata);
+  console.log("create Service: ", adddata);
   try {
-    const { statusCode: jobDalStatusCode, body: jobDalBody } = await jobDal({
+    const { statusCode: serviceDalStatusCode, body: serviceDalBody } = await serviceDal({
       method: "create",
       data: adddata,
     });
 
-    if (jobDalStatusCode === 201) {
+    if (serviceDalStatusCode === 201) {
       return {
         status: 201,
-        userdata: jobDalBody.data,
+        userdata: serviceDalBody.data,
       };
     } else {
       return {
@@ -733,14 +733,14 @@ const createUser = async (
   }
 };
 
-const fetchJob = async (): Promise<any> => {
-  const { statusCode: jobDalStatusCode, body: jobDalBody } = await jobDal({
+const fetchService = async (): Promise<any> => {
+  const { statusCode: serviceDalStatusCode, body: serviceDalBody } = await serviceDal({
     method: "get",
   });
-  if (jobDalStatusCode === 200) {
+  if (serviceDalStatusCode === 200) {
     return {
       status: 200,
-      data:jobDalBody.data};
+      data:serviceDalBody.data};
   } else {
     return {
       status: 500,
@@ -757,26 +757,26 @@ const fetchJob = async (): Promise<any> => {
 //   });
 //   return jobDalBody.data;
 // };
-const updateJobs = async (jobId: any, updateData: any): Promise<any> => {
-  console.log("Update Job Payload In Dal ===>", { jobId, updateData });
-  const { statusCode: jobDalStatusCode, body: jobDalBody } = await jobDal({
+const updateServices = async (serviceId: any, updateData: any): Promise<any> => {
+  console.log("Update Service Payload In Dal ===>", { serviceId, updateData });
+  const { statusCode: serviceDalStatusCode, body: serviceDalBody } = await serviceDal({
     method: "update",
-    query: { _id: jobId },
+    query: { _id: serviceId },
     update: updateData,
     options: { new: true } // Return updated document
   });
-  return jobDalBody.data;
+  return serviceDalBody.data;
 };
 
-const deleteJobs = async (jobId: any): Promise<any> => {
-  console.log("Delete Job Payload In Dal ===>", { jobId });
-  const { statusCode: jobDalStatusCode, body: jobDalBody } = await jobDal({
+const deleteServices = async (serviceId: any): Promise<any> => {
+  console.log("Delete Service Payload In Dal ===>", { serviceId });
+  const { statusCode: serviceDalStatusCode, body: serviceDalBody } = await serviceDal({
     method: "delete",
-    query: { _id: jobId },
+    query: { _id: serviceId },
     // update: updateData,
     options: { new: true } // Return updated document
   });
-  return jobDalBody.data;
+  return serviceDalBody.data;
 };
 
 const otpExists = async (
@@ -1100,73 +1100,73 @@ const accountLookUP = async (
 export function healthCheck(req: Request, res: Response): void {
   res.status(200).json({
     status: 200,
-    message: "Jobs service is active ✅",
+    message: "Services Microservice is active ✅",
   });
 }
 
-export async function login(req: Request, res: Response): Promise<Response> {
-  const workflow = new EventEmitter();
+// export async function login(req: Request, res: Response): Promise<Response> {
+//   const workflow = new EventEmitter();
   
-  return new Promise(async (resolve) => {
-      workflow.on("fetchuser", async () => {
-        console.log("fetchuser ==>",req.body);
-        const user = await fetchUser(req.body.phoneNumber);
-        console.log("user ==>",user);
-        if(user){
-          workflow.emit("checkPassword",user);
-        }else{
-          resolve(res.status(400).json({ 
-              status: 400, 
-              message: "User not found" 
-          }));
-        }
-      });
+//   return new Promise(async (resolve) => {
+//       workflow.on("fetchuser", async () => {
+//         console.log("fetchuser ==>",req.body);
+//         const user = await fetchUser(req.body.phoneNumber);
+//         console.log("user ==>",user);
+//         if(user){
+//           workflow.emit("checkPassword",user);
+//         }else{
+//           resolve(res.status(400).json({ 
+//               status: 400, 
+//               message: "User not found" 
+//           }));
+//         }
+//       });
 
-      workflow.on("checkPassword", async (user:any) => {
-        const isPasswordCorrect = await checkPassword(user.loginPIN,req.body.password);
-        console.log("isPasswordCorrect ==>",isPasswordCorrect);
-        const _user = {
-          _id: user._id,
-          fullName: user.fullName,
-          phoneNumber: user.phoneNumber,
-          email: user.email,
-          avatar: user.avatar,
-          role: user.role,
-          permissions: user.permissions,
-          dateJoined: user.dateJoined,
-          lastModified: user.lastModified,
-          enabled: user.enabled,
-          isActive: user.isActive,
-          isLocked: user.isLocked,
-          accesstoken: tempTokenMaker(
-            user,
-            ["set pin", "reset pin", "change pin"],
-            '1234567890abcdef'
-          )
-        };
-        if(isPasswordCorrect){
-          resolve(res.status(200).json({ 
-              status: 200, 
-              message: "You have successfully logged in",
-              data: _user
-            }));
-        }else{
-          resolve(res.status(400).json({ 
-              status: 400, 
-              message: "Password is incorrect" 
-          }));
-      }});
-      workflow.emit("fetchuser");
-  });
-}
+//       workflow.on("checkPassword", async (user:any) => {
+//         const isPasswordCorrect = await checkPassword(user.loginPIN,req.body.password);
+//         console.log("isPasswordCorrect ==>",isPasswordCorrect);
+//         const _user = {
+//           _id: user._id,
+//           fullName: user.fullName,
+//           phoneNumber: user.phoneNumber,
+//           email: user.email,
+//           avatar: user.avatar,
+//           role: user.role,
+//           permissions: user.permissions,
+//           dateJoined: user.dateJoined,
+//           lastModified: user.lastModified,
+//           enabled: user.enabled,
+//           isActive: user.isActive,
+//           isLocked: user.isLocked,
+//           accesstoken: tempTokenMaker(
+//             user,
+//             ["set pin", "reset pin", "change pin"],
+//             '1234567890abcdef'
+//           )
+//         };
+//         if(isPasswordCorrect){
+//           resolve(res.status(200).json({ 
+//               status: 200, 
+//               message: "You have successfully logged in",
+//               data: _user
+//             }));
+//         }else{
+//           resolve(res.status(400).json({ 
+//               status: 400, 
+//               message: "Password is incorrect" 
+//           }));
+//       }});
+//       workflow.emit("fetchuser");
+//   });
+// }
 
-export async function getJob(req: Request, res: Response): Promise<Response> {
-  console.log("Get Job Payload ===>", req.body);
-  const job = await fetchJob();
+export async function getService(req: Request, res: Response): Promise<Response> {
+  console.log("Get Service Payload ===>", req.body);
+  const service = await fetchService();
   return res.status(200).json({
     status: 200,
-    message: "Job fetched successfully",
-    data: job,
+    message: "Service fetched successfully",
+    data: service,
   });
 }
 
@@ -1187,19 +1187,19 @@ export async function getJob(req: Request, res: Response): Promise<Response> {
 //   }
 // }
 
-export async function updateJob(req: Request, res: Response): Promise<Response> {
-  console.log("Update Job Payload ===>", req.params.id); // Use req.params.id for path parameter
+export async function updateService(req: Request, res: Response): Promise<Response> {
+  console.log("Update Service Payload ===>", req.params.id); // Use req.params.id for path parameter
   
-  const jobId = req.query.id;
+  const serviceId = req.query.id;
   const updateData = req.body;
   
-  const updatedJob = await updateJobs(jobId, updateData);
+  const updatedService = await updateServices(serviceId, updateData);
 
-  if(updatedJob){
+  if(updatedService){
     return res.status(200).json({
       status: 200,
-      message: "Job updated successfully",
-      data: updatedJob
+      message: "Service updated successfully",
+      data: updatedService
     });
   }else{
     return res.status(400).json({
@@ -1209,62 +1209,51 @@ export async function updateJob(req: Request, res: Response): Promise<Response> 
   }
 }
 
-export async function deleteJob(req: Request, res: Response): Promise<Response> {
-  console.log("Delete Job Payload ===>", req.params.id); // Use req.params.id for path parameter
+export async function deleteService(req: Request, res: Response): Promise<Response> {
+  console.log("Delete Service Payload ===>", req.params.id); // Use req.params.id for path parameter
   
-  const jobId = req.query.id;
+  const serviceId = req.query.id;
   
-  const updatedJob = await deleteJobs(jobId);
+  const updatedService = await deleteServices(serviceId);
 
-  if(updatedJob){
+  if(updatedService){
     return res.status(200).json({
       status: 200,
-      message: "Job Deleted successfully",
-      data: updatedJob
+      message: "Service Deleted successfully",
+     // data: updatedService
     });
   }else{
     return res.status(400).json({
       status: 400,
-      message: "Job not found"
+      message: "Service not found"
     });
   }
 }
 
-export async function createJob(req: Request, res: Response): Promise<Response> {
-    console.log("Create Job Payload ===>", req.body);
+export async function createService(req: Request, res: Response): Promise<Response> {
+    console.log("Create Service Payload ===>", req.body);
     let userAddData: any = {
-      jobCreatedBy: '507f1f77bcf86cd799439011', // Example valid ObjectId
-      jobName: req.body.jobName,
-      jobTitle: req.body.jobName,
-      jobDescription: req.body.jobDescription,
-      jobStatus: req.body.jobStatus,
-      jobType: req.body.jobType,
-      jobPriority: req.body.jobPriority,
-      jobUpdatedAt: req.body.jobUpdatedAt || new Date(),
-      jobCompletedAt: req.body.jobCompletedAt || new Date(),
-      jobDeletedAt: req.body.jobDeletedAt || new Date(),
-      jobCategory: req.body.jobCategory,
-      jobServiceLocation: req.body.jobServiceLocation,
-      jobServiceCategory: req.body.jobServiceCategory,
-      jobServiceExperience: req.body.jobServiceExperience,
-      jobServiceType: req.body.jobServiceType,
-      jobPrice: req.body.jobPrice,
-      jobAdditionalFee: req.body.jobAdditionalFee,
-      jobDeletedBy: req.body.jobDeletedBy,
-      jobUrgencyLevel: req.body.jobUrgencyLevel || "low",
-      jobUrgencyDate: req.body.jobUrgencyDate || new Date(),
-      jobUrgencyTime: req.body.jobUrgencyTime || new Date(),
-      jobServiceSkills: req.body.jobServiceSkills || [],
-      jobAssignedTechnician: req.body.jobAssignedTechnician,
-      jobAssignedTechnicianName: req.body.jobAssignedTechnicianName,
-      jobImages: req.body.jobImages || [],
-      jobCreatedAt: req.body.jobCreatedAt || new Date(),
-      jobLocation: req.body.jobLocation,
-      jobLatitude: req.body.jobLatitude || 0,
-      jobLongitude: req.body.jobLongitude || 0,
-      jobAddress: req.body.jobAddress || "",
-      jobCity: req.body.jobCity || "",
-      jobState: req.body.jobState || "",
+      serviceCreatedBy: '507f1f77bcf86cd799439011', // Example valid ObjectId
+      serviceName: req.body.serviceName,
+      serviceTitle: req.body.serviceTitle,
+      serviceDescription: req.body.serviceDescription,
+      serviceStatus: req.body.serviceStatus,
+      serviceType: req.body.serviceType,
+      // serviceUpdatedAt: req.body.serviceUpdatedAt || new Date(),
+      serviceCompletedAt: req.body.serviceCompletedAt || new Date(),
+      serviceDeletedAt: req.body.serviceDeletedAt || new Date(),
+      serviceCategory: req.body.serviceCategory,
+      serviceServiceCategory: req.body.serviceServiceCategory,
+      serviceServiceType: req.body.serviceServiceType,
+      serviceDeletedBy: req.body.serviceDeletedBy,
+      serviceUrgencyDate: req.body.serviceUrgencyDate || new Date(),
+      serviceUrgencyTime: req.body.serviceUrgencyTime || new Date(),
+      serviceServiceSkills: req.body.serviceServiceSkills || [],
+      serviceAssignedTechnician: req.body.serviceAssignedTechnician,
+      serviceCreatedAt: req.body.serviceCreatedAt || new Date(),
+      serviceAddress: req.body.serviceAddress || "",
+      serviceCity: req.body.serviceCity || "",
+      serviceState: req.body.serviceState || "",
     };
 
     let _userresp = await createUser(userAddData);
@@ -4150,11 +4139,11 @@ export async function forgotPIN(
 
 export default {
   healthCheck,
-  login,
-  createJob,
-  getJob,
-  updateJob,
-  deleteJob,
+  //login,
+  deleteService,
+  createService,
+  getService,
+  updateService,
   deviceLookUP,
   phoneNumberLookUP,
   memberSelfSignupV2,

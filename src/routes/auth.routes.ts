@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-misused-promises */
 
 import { Router,Request, Response } from "express";
-import authController, { createJob, deleteJob, getJob, healthCheck, login, updateJob } from "../controller/auth.controller";
+import authController, {  createService, deleteService, getService, healthCheck, updateService } from "../controller/auth.controller";
 // import authController from "../../controller/auth.controller";
 // import authorization from "../../lib/authorization";
 // import authorizedevice from "../../lib/authorizeddevice";
@@ -21,29 +21,29 @@ router.get(
   healthCheck
 );
 
-router.post(
-  "/login",
-  login
-);
+// router.post(
+//   "/create-service-subcategory",
+//   createServiceSubCategory
+// );
 
 router.post(
-  "/create-job",
-  createJob
+  "/create-service",
+  createService
 );
 
 router.get(
-  "/get-jobs",
-  getJob
+  "/get-services",
+  getService
 );
 
 router.put(
-  "/update-jobs",
-  updateJob
+  "/update-services",
+  updateService
 );
 
 router.delete(
-  "/delete-jobs",
-  deleteJob
+  "/delete-services",
+  deleteService
 );
 
 // router.get(
