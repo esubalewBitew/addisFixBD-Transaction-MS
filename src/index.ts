@@ -32,7 +32,7 @@ async function validateDBConnection() {
       console.error('Database connection validation failed:', error);
     }
   }
-  
+
   app.use(cors());
   app.use(function (req, res, next) {
     res.header("Access-Control-Allow-Origin", "*");
@@ -46,7 +46,6 @@ async function validateDBConnection() {
     );
     next();
   });
-
 
   //Free From Guard route
   app.use(

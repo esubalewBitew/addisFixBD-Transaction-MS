@@ -1,10 +1,10 @@
-# Transaction Management System
+# Transaction Microservice System
 
-This document provides comprehensive information about the Transaction Management System for the AddisFix platform.
+This document provides comprehensive information about the Transaction MicroService System for the AddisFix platform.
 
 ## Overview
 
-The Transaction Management System handles all financial transactions including:
+The Transaction MicroService System handles all financial transactions including:
 - Job payments and commissions
 - Technician payouts
 - Client billing
