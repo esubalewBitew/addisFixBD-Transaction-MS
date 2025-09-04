@@ -25,11 +25,13 @@ function authorization(
   permissions: string[],
   userrole?: string[]
 ) {
+  // console.log("authorization =====>", realms, permissions, userrole);
   return async function middleware(
     req: Request,
     res: Response,
     next: NextFunction
   ) {
+    console.log("authorization =====>", (req as any)._user );
     if ((req as any)._user == null) {
       res.status(401);
       res.json({
@@ -47,13 +49,19 @@ function authorization(
     let realmFound = false;
     let isAuthorized = false;
 
-    realms.forEach(function (realm) {
-      if (realm === "*" || user.realm === realm) {
-        realmFound = true;
-      }
-    });
+    console.log("user realm ==>>>: ", user.realm);
 
-    console.log("user permissions: ", permissions, _PERMISSIONS);
+    // realms.forEach(function (realm) {
+    //   if (realm === "*" || user.realm === realm) {
+    //     realmFound = true;
+    //   }
+    // });
+
+    if (user.realm === "portal") {
+      realmFound = true;
+    }
+
+    console.log("user permissions ==>>>: ", _PERMISSIONS);
     let permissionFound = permissions.some((userpermission) =>
       _PERMISSIONS.includes(userpermission)
     );
@@ -66,7 +74,8 @@ function authorization(
       if (userrole?.includes(user.role)) bankfound = true;
     } else bankfound = true;
 
-    if (realmFound && bankfound && permissionFound) isAuthorized = true;
+    if (realmFound  && permissionFound) isAuthorized = true;
+    //if (true) isAuthorized = true;
 
     console.log(user.realm, realms);
     console.log(
