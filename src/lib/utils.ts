@@ -25,7 +25,7 @@ let generateTransactionID = async () => {
 
 let localEncryptPassword = (password: string) => {
   let PWDSecretKey = '12345678901234567890123456789012'// global._CONFIG._VALS.PWDSecretKey;
-  let PWDiv = global._CONFIG._VALS.PWDiv;
+  let PWDiv = (global as any)._CONFIG._VALS.PWDiv;
 
   console.log("PWDSecretKey", PWDSecretKey);
 
@@ -45,7 +45,7 @@ let localDecryptPassword = (encryptedPassword: string) => {
 
   console.log("encryptedPassword data", encryptedPassword);
   let PWDSecretKey = '12345678901234567890123456789012'// global._CONFIG._VALS.PWDSecretKey;
-  let PWDiv = global._CONFIG._VALS.PWDiv;
+  let PWDiv = (global as any)._CONFIG._VALS.PWDiv;
 
   const decipher = crypto.createDecipheriv("aes-256-cbc", PWDSecretKey, PWDiv);
 

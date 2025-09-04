@@ -25,8 +25,8 @@ export default function authenticate(): {
   ): Promise<void> {
     const authorization = req.get("Authorization");
     console.log("authorization ===>>><<<>>>", authorization);
-    const _JWTSECRET = global?._CONFIG?._VALS?._JWTSECRET || "addisfix";
-    const _REFRESHSECRET = global?._CONFIG?._VALS?._REFRESHSECRET || "addisfix";
+    const _JWTSECRET = (global as any)?._CONFIG?._VALS?._JWTSECRET || "addisfix";
+    const _REFRESHSECRET = (global as any)?._CONFIG?._VALS?._REFRESHSECRET || "addisfix";
 
     /**
      * ONBOARDING APP FILER

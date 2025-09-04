@@ -4,14 +4,15 @@ import path from "path";
 import initConfig from "../config/index";
 import config from "../config/index";
 
-global._CONFIG = config;
+// Fix: Use proper type assertion for global assignment
+(global as any)._CONFIG = config;
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 const connect = async () => {
   // const _CONFIG = await initConfig();
   try {
     mongoose
-      .connect(_CONFIG.MONGODB_URL)
+      .connect((global as any)._CONFIG.MONGODB_URL)
       .then(() => {
         console.log("Connection Made");
       })
