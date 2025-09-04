@@ -13,7 +13,7 @@ global._CONFIG = config;
 import Router from './routes/index';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3006;
 
 app.use(express.json());
 app.use(express.json({ limit: "10mb" }));
@@ -51,11 +51,7 @@ async function validateDBConnection() {
   app.use(
     authenticate().unless({
       path: [
-         "/addisfix/services/healthcheck",
-         "/addisfix/services/create-service",
-         "/addisfix/services/get-services",
-         "/addisfix/services/update-services",
-         "/addisfix/services/delete-services"
+         "/addisfix/transaction/healthcheck",
       ],
     })
   );

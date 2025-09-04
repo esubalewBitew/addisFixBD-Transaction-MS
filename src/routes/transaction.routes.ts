@@ -4,11 +4,12 @@ import { TransactionController } from "../controller/transaction.controller";
 const router = Router();
 
 // Transaction CRUD operations
-router.post("/", TransactionController.createTransaction);
-router.get("/", TransactionController.getTransactions);
-router.get("/:id", TransactionController.getTransactionById);
-router.put("/:id", TransactionController.updateTransaction);
-router.delete("/:id", TransactionController.deleteTransaction);
+router.post("/create-transaction", TransactionController.createTransaction);
+router.put("/confirm-transaction", TransactionController.confirmTransaction);
+router.get("/get-transactions", TransactionController.getTransactions);
+router.get("/get-transaction-by-id", TransactionController.getTransactionById);
+router.put("/update-transaction", TransactionController.updateTransaction);
+router.delete("/delete-transaction", TransactionController.deleteTransaction);
 
 // Transaction status operations
 router.patch("/:id/mark-paid", TransactionController.markAsPaid);

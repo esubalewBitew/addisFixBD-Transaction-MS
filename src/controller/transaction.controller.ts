@@ -8,33 +8,78 @@ import {
 } from "../config/types/transaction";
 import mongoose from "mongoose";
 
+import utils from "../lib/utils";
+
 export class TransactionController {
     
     // Create a new transaction
     static async createTransaction(req: Request, res: Response) {
+        console.log("createTransaction", req.body);
         try {
             const transactionData: CreateTransactionInput = req.body;
+
+            transactionData.userId = (req as any)._user._id;
+            transactionData.userCode = (req as any)._user.userCode;
             
             // Validate required fields
-            if (!transactionData.FTNumber || !transactionData.userId || !transactionData.amount) {
+            if (!transactionData || !transactionData || !transactionData.amount) {
                 return res.status(400).json({
                     success: false,
                     message: "Missing required fields: FTNumber, userId, and amount are required"
                 });
             }
 
-            const transaction = new Transaction(transactionData);
-            await transaction.save();
-
-            return res.status(201).json({
-                success: true,
-                message: "Transaction created successfully",
-                data: transaction
-            });
+            const transactionID = await utils.generateTransactionID();
+            transactionData.transactionID = transactionID;
+            if(transactionData.transactionID)
+            {
+                const transaction = new Transaction(transactionData);
+                await transaction.save();
+                return res.status(201).json({
+                    success: true,
+                    message: "Transaction created successfully",
+                    data: transaction
+                });
+            }
+            else
+            {
+                return res.status(400).json({
+                    success: false,
+                    message: "Failed to generate transaction ID"
+                });
+            }
+            
         } catch (error: any) {
             return res.status(500).json({
                 success: false,
                 message: "Error creating transaction",
+                error: error.message
+            });
+        }
+    }
+
+    static async confirmTransaction(req: Request, res: Response) {
+        try {
+            const { transactionID } = req.body;
+            const transaction = await Transaction.findOne({ transactionID });
+            if (!transaction) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Transaction not found"
+                });
+            }
+            else
+            {
+                return res.status(200).json({
+                    success: true,
+                    message: "Transaction confirmed successfully",
+                    data: transaction
+                });
+            }
+        } catch (error: any) {
+            return res.status(500).json({
+                success: false,
+                message: "Error confirming transaction",
                 error: error.message
             });
         }
@@ -77,21 +122,21 @@ export class TransactionController {
             const {
                 page = 1,
                 limit = 10,
-                userId,
-                clientId,
-                jobId,
-                technicianId,
-                transactionType,
-                transactionStatus,
-                paymentMethod,
-                isPaid,
-                dateFrom,
-                dateTo,
-                amountMin,
-                amountMax,
-                bankName,
-                agentCode,
-                branchCode
+                userId = (req as any)._user._id,
+                clientId = (req as any)._user.clientId,
+                jobId = "",
+                technicianId = "",
+                transactionType = "transfer",
+                transactionStatus = "pending",
+                paymentMethod = "telebirr",
+                isPaid = false,
+                dateFrom = "",
+                dateTo = "",
+                amountMin = 0,
+                amountMax = 0,
+                bankName = "",
+                agentCode = "",
+                branchCode = ""
             } = req.query;
 
             // Build filter object

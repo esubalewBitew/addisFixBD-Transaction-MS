@@ -5,7 +5,7 @@ import { TopLevelConfig, Vals } from "./types/config";
 import path from "path";
 
 const getConfig = (): TopLevelConfig => ({
-  MONGODB_URL: process.env.MONGODB_URL || 'mongodb://localhost:27017/AddisFix_Db',
+  MONGODB_URL: process.env.MONGODB_URL_PROD || 'mongodb://localhost:27017/AddisFix_Db',
 
   _VALS: {
     SMSSender: process.env.SMS_SENDER || 'AddisFix',
@@ -38,9 +38,9 @@ const getConfig = (): TopLevelConfig => ({
     KAFKA_ADDRESS: process.env.KAFKA_ADDRESS,
 
     resourcePath: path.resolve(__dirname, "..", "..", "..", "_resources"),
-    baseURL: process.env.BASE_URL || 'http://localhost:3000',
-    PORT: Number(process.env.PORT) || 3000,
-    PORT_AUTH: Number(process.env.PORT_AUTH) || 3000,
+    baseURL: process.env.BASE_URL || 'http://localhost:3006',
+    PORT: Number(process.env.PORT) || 3006,
+    PORT_AUTH: Number(process.env.PORT_AUTH) || 3006,
 
     appId: process.env.APP_ID || 'addisfix',
     bankEmail: process.env.BANK_EMAIL || 'bank@addisfix.com',

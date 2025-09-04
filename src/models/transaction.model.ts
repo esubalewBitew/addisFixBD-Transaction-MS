@@ -11,7 +11,7 @@ const transactionSchema = new mongoose.Schema({
     },
     FTNumber: {
         type: String,
-        required: true,
+        required: false,
     },
     
     // User and Client Information
@@ -29,7 +29,7 @@ const transactionSchema = new mongoose.Schema({
     },
     clientId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Business",
+        ref: "User",
     },
     
     // Job Related Information
@@ -54,7 +54,7 @@ const transactionSchema = new mongoose.Schema({
     // Account Information
     debitAccountNumber: {
         type: String,
-        required: true,
+        required: false,
     },
     debitAccountHolderName: {
         type: String,
@@ -66,7 +66,7 @@ const transactionSchema = new mongoose.Schema({
     },
     creditAccountHolderName: {
         type: String,
-        required: true,
+        required: false,
     },
     creditPhoneNumber: {
         type: String,

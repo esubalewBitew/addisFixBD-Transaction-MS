@@ -74,9 +74,11 @@ export default function authenticate(): {
           ) {
             console.log(" * * * * * * * * temp token * * * * * * * *");
 
-            _tokenvals = JSON.parse(
-              utils.localDecryptPassword(verifytoken.data)
-            );
+            _tokenvals = verifytoken.data;
+
+            // _tokenvals = JSON.parse(
+            //   utils.localDecryptPassword(verifytoken.data)
+            // );
            // debugging_logger_v2(["_tokenvals temp: ", _tokenvals]);
             // _tokenvals.userpermissions?.map((_permission: string) => {
             //   _permissions.push(_permission);
@@ -88,18 +90,19 @@ export default function authenticate(): {
             (req as any)._ignore = true;
           } else {
             console.log(" * * * * * * * * token * * * * * * * *");
-            _tokenvals = utils.localDecryptPassword(verifytoken.data);
+            console.log("verifytoken.data ===>", verifytoken.data);
+            _tokenvals = verifytoken.data; //utils.localDecryptPassword(verifytoken.data);
             //debugging_logger_v2(["_tokenvals: ", _tokenvals]);
-            let compressedBuffer = Buffer.from(_tokenvals, "base64");
+            //let compressedBuffer = Buffer.from(_tokenvals, "base64");
             // debugging_logger_v2([
             //   "compressedBuffer: ",
             //   compressedBuffer.toString("utf-8"),
             // ]);
-            let decompressedBuffer = await inflate(compressedBuffer);
+            //let decompressedBuffer = await inflate(compressedBuffer);
 
-            let decompressedString = decompressedBuffer.toString();
+           // let decompressedString = decompressedBuffer.toString();
             //debugging_logger_v2(["decompressedString: ", decompressedString]);
-            _tokenvals = JSON.parse(decompressedString);
+            //_tokenvals = JSON.parse(decompressedString);
             // _permissions = _tokenvals.permissions as string[];
 
            // debugging_logger_v2(["_tokenvals: ", _tokenvals]);
@@ -126,6 +129,8 @@ export default function authenticate(): {
             deviceUUID: _tokenvals.deviceuuid,
             publicKey: _tokenvals.publicKey,
           };
+          console.log("req.user ===>", (req as any)._user);
+          next();
           //await checksession(_tokenvals, verifytoken.exp)(req, res, next);
         } catch (error:any) {
           console.log("error in authentication ===>>><<<>>>", error.message);

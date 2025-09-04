@@ -106,6 +106,7 @@ export interface Transaction extends Document {
 
 // Transaction creation interface (for creating new transactions)
 export interface CreateTransactionInput {
+    transactionID: string;
     FTNumber: string;
     userId: string | Types.ObjectId;
     userCode: string;

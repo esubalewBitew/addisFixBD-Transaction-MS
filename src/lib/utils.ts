@@ -18,6 +18,11 @@ let formatPhoneNumber = (phoneNumber: string) => {
     return `+${String(phoneNumber)}`
 };
 
+let generateTransactionID = async () => {
+  const rn = await getRandomArbitrary();
+  return rn;
+};
+
 let localEncryptPassword = (password: string) => {
   let PWDSecretKey = '12345678901234567890123456789012'// global._CONFIG._VALS.PWDSecretKey;
   let PWDiv = global._CONFIG._VALS.PWDiv;
@@ -55,4 +60,5 @@ export default {
   getRandomArbitrary,
   localEncryptPassword,
   localDecryptPassword,
+  generateTransactionID
 };
