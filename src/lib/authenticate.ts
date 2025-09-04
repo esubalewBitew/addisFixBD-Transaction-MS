@@ -24,6 +24,7 @@ export default function authenticate(): {
     next: NextFunction
   ): Promise<void> {
     const authorization = req.get("Authorization");
+    console.log("authorization ===>>><<<>>>", authorization);
     const _JWTSECRET = global?._CONFIG?._VALS?._JWTSECRET || "addisfix";
     const _REFRESHSECRET = global?._CONFIG?._VALS?._REFRESHSECRET || "addisfix";
 
@@ -46,6 +47,10 @@ export default function authenticate(): {
       } else {
         try {
           const secretKey = _JWTSECRET;
+          console.log("secretKey ===>>><<<>>>", secretKey);
+
+          const decoded = jwt.verify(token, secretKey);
+          console.log("decoded ===>>><<<>>>", decoded);
 
           let verifytoken: any = jwt.verify(token, secretKey);
           // debugging_logger_v2(["verifytoken: ", verifytoken]);
@@ -73,64 +78,36 @@ export default function authenticate(): {
             )
           ) {
             console.log(" * * * * * * * * temp token * * * * * * * *");
-
-            _tokenvals = verifytoken.data;
-
-            // _tokenvals = JSON.parse(
-            //   utils.localDecryptPassword(verifytoken.data)
-            // );
-           // debugging_logger_v2(["_tokenvals temp: ", _tokenvals]);
-            // _tokenvals.userpermissions?.map((_permission: string) => {
-            //   _permissions.push(_permission);
-            // });
-            // console.log('"permissions: ", _permissions);', _permissions);
-            // _permissions = _tokenvals.permissions as string[];
-            // debugging_logger_v2(["permissions: ", _permissions]);
-
             (req as any)._ignore = true;
           } else {
             console.log(" * * * * * * * * token * * * * * * * *");
-            console.log("verifytoken.data ===>", verifytoken.data);
-            _tokenvals = verifytoken.data; //utils.localDecryptPassword(verifytoken.data);
-            //debugging_logger_v2(["_tokenvals: ", _tokenvals]);
-            //let compressedBuffer = Buffer.from(_tokenvals, "base64");
-            // debugging_logger_v2([
-            //   "compressedBuffer: ",
-            //   compressedBuffer.toString("utf-8"),
-            // ]);
-            //let decompressedBuffer = await inflate(compressedBuffer);
-
-           // let decompressedString = decompressedBuffer.toString();
-            //debugging_logger_v2(["decompressedString: ", decompressedString]);
-            //_tokenvals = JSON.parse(decompressedString);
-            // _permissions = _tokenvals.permissions as string[];
-
-           // debugging_logger_v2(["_tokenvals: ", _tokenvals]);
+           // _tokenvals = utils.localDecryptPassword(verifytoken.data);
+           console.log("verifytoken.data ===>>><<<>>>", verifytoken.data);
+           _tokenvals = verifytoken.data;
           }
-          //debugging_logger_v2(["user _tokenvals: ", _tokenvals]);
           (req as any)._user = {
             _id: _tokenvals.userid,
             fullName: _tokenvals.fullname,
             phoneNumber: _tokenvals.phonenumber,
-            otpfor: _tokenvals.otpfor ?? "",
-            email: _tokenvals.useremail ?? "",
             realm: _tokenvals.userrealm,
-            role: _tokenvals.userrole,
+            //otpfor: _tokenvals.otpfor ?? "",
+            //email: _tokenvals.useremail ?? "",
+            //realm: _tokenvals.userrealm,
+            //role: _tokenvals.userrole,
             userCode: _tokenvals.usercode,
-            organizationID: _tokenvals.organizationid,
-            primaryAuthentication: _tokenvals.primaryauth,
+            //organizationID: _tokenvals.organizationid,
+            //primaryAuthentication: _tokenvals.primaryauth,
             permissions: _tokenvals.permissions,
-            department: _tokenvals?.department,
-            ifbmember: _tokenvals.ifbmember,
-            isMaker: _tokenvals.makersuser,
-            isChecker: _tokenvals.checkeruser,
-            CAPLimit: _tokenvals.caplimit,
-            sessionExpiresOn: _tokenvals.sessionexpiry,
+            //department: _tokenvals?.department,
+            //ifbmember: _tokenvals.ifbmember,
+            //isMaker: _tokenvals.makersuser,
+            //isChecker: _tokenvals.checkeruser,
+            //CAPLimit: _tokenvals.caplimit,
+            //sessionExpiresOn: _tokenvals.sessionexpiry,
             deviceUUID: _tokenvals.deviceuuid,
             publicKey: _tokenvals.publicKey,
           };
-          console.log("req.user ===>", (req as any)._user);
-          next();
+          return next();
           //await checksession(_tokenvals, verifytoken.exp)(req, res, next);
         } catch (error:any) {
           console.log("error in authentication ===>>><<<>>>", error.message);
