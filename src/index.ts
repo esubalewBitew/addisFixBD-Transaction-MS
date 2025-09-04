@@ -8,7 +8,8 @@ import cors from 'cors';
 
 import mongoDB from "./mongoDB/mongoDB";
 
-global._CONFIG = config;
+// Fix: Use proper type assertion for global assignment
+(global as any)._CONFIG = config;
 
 import Router from './routes/index';
 
