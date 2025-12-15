@@ -2,8 +2,10 @@ import { Document, Types } from "mongoose";
 
 export interface Transaction extends Document {
     // Core Transaction Identifiers
-    transactionID: string;
-    FTNumber: string;
+    transactionID?: string;
+    transactionIDForDownPayment?: string;
+    FTNumber?: string;
+    FTNumberForDownPayment?: string;
     
     // User and Client Information
     userId: Types.ObjectId;
@@ -19,47 +21,63 @@ export interface Transaction extends Document {
     technicianPhone?: string;
     
     // Account Information
-    debitAccountNumber: string;
+    debitAccountNumber?: string;
     debitAccountHolderName: string;
     creditAccountNumber: string;
-    creditAccountHolderName: string;
+    creditAccountHolderName?: string;
     creditPhoneNumber?: string;
     
-    // Financial Details
-    amount: number;
+    // Financial Details - Final Payment
+    amount?: number;
     totalAmount?: number;
     paidAmount?: number;
     serviceFee?: number;
+    
+    // Financial Details - Down Payment
+    amountForDownPayment?: number;
+    totalAmountForDownPayment?: number;
+    paidAmountForDownPayment?: number;
+    serviceFeeForDownPayment?: number;
+    
+    // Common Financial Details
     facilitationFee?: number;
     VAT?: number;
     tipAmount?: number;
     deliveryAmount?: number;
     commissionAmount?: number;
-    currency: string;
+    currency?: string;
+    
+    // Payment Type
+    paymentType?: "downPayment" | "finalPayment";
     
     // Transaction Type and Status
-    transactionType: "deposit" | "withdrawal" | "transfer" | "payment" | "refund" | "commission" | "tip";
-    transactionStatus: "pending" | "completed" | "failed" | "cancelled" | "processing";
-    paymentMethod?: "telebirr" | "mpesa" | "bank_transfer" | "cash" | "wallet";
+    transactionType: "deposit" | "withdrawal" | "transfer" | "payment" | "refund" | "commission" | "tip" | "downPayment" | "finalPayment" | "salary" | "bonus" | "adjustment" | "fee";
+    transactionStatus?: "pending" | "completed" | "failed" | "cancelled" | "processing";
+    transactionStatusForDownPayment?: "pending" | "completed" | "failed" | "cancelled" | "processing";
+    paymentMethod?: "telebirr" | "mpesa" | "bank_transfer" | "cash" | "wallet" | "chapa";
+    paymentMethodForDownPayment?: "telebirr" | "mpesa" | "bank_transfer" | "cash" | "wallet" | "chapa";
     
     // Payment Status Flags
-    isPaid: boolean;
-    isExpired: boolean;
-    isFailed: boolean;
-    isReversed: boolean;
+    isPaid?: boolean;
+    isPaidForDownPayment?: boolean;
+    isExpired?: boolean;
+    isFailed?: boolean;
+    isFailedForDownPayment?: boolean;
+    isReversed?: boolean;
+    isReversedForDownPayment?: boolean;
     
     // Service and Business Related
-    isOwnTransfer: boolean;
-    isMerchant: boolean;
-    isTipPayment: boolean;
-    isRequest: boolean;
+    isOwnTransfer?: boolean;
+    isMerchant?: boolean;
+    isTipPayment?: boolean;
+    isRequest?: boolean;
     requestStatus?: "pending" | "accepted" | "rejected";
     requestID?: string;
     
     // Bank and External Service Information
     bankName?: string;
     BCICode?: string;
-    isDashenBank: boolean;
+    isDashenBank?: boolean;
     
     // Agent and Branch Information
     agentCode?: string;
@@ -90,26 +108,28 @@ export interface Transaction extends Document {
     transactionReason: string;
     
     // Saving and GL Action
-    isSaved: boolean;
-    savingCode: string;
-    GLActionType: string;
-    isGLActionCreditType: boolean;
-    isGLActionDebitType: boolean;
+    isSaved?: boolean;
+    savingCode?: string;
+    GLActionType?: string;
+    isGLActionCreditType?: boolean;
+    isGLActionDebitType?: boolean;
     
     // Incoming Transaction Flags
-    isIncoming: boolean;
+    isIncoming?: boolean;
     incomingSource?: string;
     
     // Three Click Up Feature
-    isThreeClickUp: boolean;
+    isThreeClickUp?: boolean;
 }
 
 // Transaction creation interface (for creating new transactions)
 export interface CreateTransactionInput {
-    transactionID: string;
-    FTNumber: string;
+    transactionID?: string;
+    transactionIDForDownPayment?: string;
+    FTNumber?: string;
+    FTNumberForDownPayment?: string;
     userId: string | Types.ObjectId;
-    userCode: string;
+    userCode?: string;
     phoneNumber?: string;
     clientId?: string | Types.ObjectId;
     jobId?: string | Types.ObjectId;
@@ -117,21 +137,50 @@ export interface CreateTransactionInput {
     technicianId?: string | Types.ObjectId;
     technicianName?: string;
     technicianPhone?: string;
-    debitAccountNumber: string;
+    debitAccountNumber?: string;
     debitAccountHolderName: string;
     creditAccountNumber: string;
-    creditAccountHolderName: string;
+    creditAccountHolderName?: string;
     creditPhoneNumber?: string;
-    amount: number;
+    
+    // Financial Details - Final Payment
+    amount?: number;
+    totalAmount?: number;
+    paidAmount?: number;
     serviceFee?: number;
+    
+    // Financial Details - Down Payment
+    amountForDownPayment?: number;
+    totalAmountForDownPayment?: number;
+    paidAmountForDownPayment?: number;
+    serviceFeeForDownPayment?: number;
+    
+    // Common Financial Details
     facilitationFee?: number;
     VAT?: number;
     tipAmount?: number;
     deliveryAmount?: number;
     commissionAmount?: number;
     currency?: string;
-    transactionType: "deposit" | "withdrawal" | "transfer" | "payment" | "refund" | "commission" | "tip";
-    paymentMethod?: "telebirr" | "mpesa" | "bank_transfer" | "cash" | "wallet";
+    
+    // Payment Type
+    paymentType?: "downPayment" | "finalPayment";
+    
+    transactionType: "deposit" | "withdrawal" | "transfer" | "payment" | "refund" | "commission" | "tip" | "downPayment" | "finalPayment" | "salary" | "bonus" | "adjustment" | "fee";
+    transactionStatus?: "pending" | "completed" | "failed" | "cancelled" | "processing";
+    transactionStatusForDownPayment?: "pending" | "completed" | "failed" | "cancelled" | "processing";
+    paymentMethod?: "telebirr" | "mpesa" | "bank_transfer" | "cash" | "wallet" | "chapa";
+    paymentMethodForDownPayment?: "telebirr" | "mpesa" | "bank_transfer" | "cash" | "wallet" | "chapa";
+    
+    // Payment Status Flags
+    isPaid?: boolean;
+    isPaidForDownPayment?: boolean;
+    isExpired?: boolean;
+    isFailed?: boolean;
+    isFailedForDownPayment?: boolean;
+    isReversed?: boolean;
+    isReversedForDownPayment?: boolean;
+    
     transactionReason: string;
     bankName?: string;
     BCICode?: string;
@@ -151,11 +200,16 @@ export interface CreateTransactionInput {
 // Transaction update interface
 export interface UpdateTransactionInput {
     transactionStatus?: "pending" | "completed" | "failed" | "cancelled" | "processing";
+    transactionStatusForDownPayment?: "pending" | "completed" | "failed" | "cancelled" | "processing";
     isPaid?: boolean;
+    isPaidForDownPayment?: boolean;
     isExpired?: boolean;
     isFailed?: boolean;
+    isFailedForDownPayment?: boolean;
     isReversed?: boolean;
+    isReversedForDownPayment?: boolean;
     paidAmount?: number;
+    paidAmountForDownPayment?: number;
     paidAt?: Date;
     requestStatus?: "pending" | "accepted" | "rejected";
     coreResponse?: any;

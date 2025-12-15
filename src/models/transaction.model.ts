@@ -6,14 +6,22 @@ const transactionSchema = new mongoose.Schema({
     // Core Transaction Identifiers
     transactionID: {
         type: String,
-        required: true,
+        required: false,
+        unique: true,
+    },
+   transactionIDForDownPayment: {
+        type: String,
+        required: false,
         unique: true,
     },
     FTNumber: {
         type: String,
         required: false,
     },
-    
+    FTNumberForDownPayment: {
+        type: String,
+        required: false,
+    },
     // User and Client Information
     userId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -75,7 +83,7 @@ const transactionSchema = new mongoose.Schema({
     // Financial Details
     amount: {
         type: Number,
-        required: true,
+        required: false,
     },
     totalAmount: {
         type: Number,
@@ -84,6 +92,20 @@ const transactionSchema = new mongoose.Schema({
         type: Number,
     },
     serviceFee: {
+        type: Number,
+        default: 0,
+    },
+    amountForDownPayment: {
+        type: Number,
+        required: true,
+    },
+    totalAmountForDownPayment: {
+        type: Number,
+    },
+    paidAmountForDownPayment: {
+        type: Number,
+    },
+    serviceFeeForDownPayment: {
         type: Number,
         default: 0,
     },
@@ -111,11 +133,16 @@ const transactionSchema = new mongoose.Schema({
         type: String,
         default: "ETB",
     },
+    paymentType: {
+        type: String,
+        enum: ["downPayment", "finalPayment"],
+        required: true,
+    },
     
     // Transaction Type and Status
     transactionType: {
         type: String,
-        enum: ["deposit", "withdrawal", "transfer", "payment", "refund", "commission", "tip"],
+        enum: ["deposit", "withdrawal", "transfer", "payment", "refund", "commission", "tip","downPayment", "finalPayment", "salary", "bonus", "adjustment", "fee"],
         required: true,
     },
     transactionStatus: {
@@ -124,13 +151,32 @@ const transactionSchema = new mongoose.Schema({
         required: true,
         default: "pending",
     },
+    transactionStatusForDownPayment: {
+        type: String,
+        enum: ["pending", "completed", "failed", "cancelled", "processing"],
+        required: false,
+        default: "pending",
+    },
     paymentMethod: {
         type: String,
-        enum: ["telebirr", "mpesa", "bank_transfer", "cash", "wallet"],
+        enum: ["telebirr", "mpesa", "bank_transfer", "cash", "wallet","chapa"],
+        required: false,
+        default: "chapa",
+    },
+
+    paymentMethodForDownPayment: {
+        type: String,
+        enum: ["telebirr", "mpesa", "bank_transfer", "cash", "wallet","chapa"],
+        required: false,
+        default: "chapa",
     },
     
     // Payment Status Flags
     isPaid: {
+        type: Boolean,
+        default: false,
+    },
+    isPaidForDownPayment: {
         type: Boolean,
         default: false,
     },
@@ -142,7 +188,15 @@ const transactionSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    isFailedForDownPayment: {
+        type: Boolean,
+        default: false,
+    },
     isReversed: {
+        type: Boolean,
+        default: false,
+    },
+    isReversedForDownPayment: {
         type: Boolean,
         default: false,
     },
@@ -183,7 +237,6 @@ const transactionSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
-    
     // Agent and Branch Information
     agentCode: {
         type: String,
@@ -200,7 +253,6 @@ const transactionSchema = new mongoose.Schema({
     businessId: {
         type: String,
     },
-    
     // External References
     telebirrReference: {
         type: String,
@@ -211,7 +263,6 @@ const transactionSchema = new mongoose.Schema({
     incomingReference: {
         type: String,
     },
-    
     // Technical and Response Data
     coreResponse: {
         type: mongoose.Schema.Types.Mixed,
@@ -300,13 +351,36 @@ transactionSchema.index({ isPaid: 1 });
 transactionSchema.index({ clientId: 1 });
 
 // Pre-save middleware to generate transaction ID if not provided
+// transactionSchema.pre("save", function(next) {
+//     if (!this.transactionID) {
+//         this.transactionID = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+//     }
+    
+//     // Set totalAmount if not provided
+//     if (!this.totalAmount) {
+//         this.totalAmount = (this.amount || 0) + (this.serviceFee || 0) + (this.VAT || 0) + (this.tipAmount || 0);
+//     }
+    
+//     next();
+// });
+
 transactionSchema.pre("save", function(next) {
-    if (!this.transactionID) {
-        this.transactionID = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    if (!this.transactionIDForDownPayment) {
+        this.transactionIDForDownPayment = `DP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     }
     
-    // Set totalAmount if not provided
-    if (!this.totalAmount) {
+    // Only generate final payment transaction ID if final payment amount is provided
+    if (this.amount && !this.transactionID) {
+        this.transactionID = `FP-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    }
+    
+    // Set totalAmount for down payment if not provided
+    if (!this.totalAmountForDownPayment) {
+        this.totalAmountForDownPayment = (this.amountForDownPayment || 0) + (this.serviceFeeForDownPayment || 0) + (this.VAT || 0);
+    }
+    
+    // Set totalAmount for final payment if not provided and amount exists
+    if (this.amount && !this.totalAmount) {
         this.totalAmount = (this.amount || 0) + (this.serviceFee || 0) + (this.VAT || 0) + (this.tipAmount || 0);
     }
     
