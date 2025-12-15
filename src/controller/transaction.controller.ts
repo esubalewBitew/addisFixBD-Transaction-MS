@@ -114,28 +114,56 @@ export class TransactionController {
       transactionData.userId = (req as any)._user._id;
 
       // Validate required fields
-      if (!transactionData || !transactionData.transactionID) {
+      if (!transactionData || !transactionData.jobId) {
         return res.status(400).json({
           success: false,
-          message: "Missing required fields: transactionID is required",
+          message: "Missing required fields: jobId is required",
         });
       }
 
-      // Find the already-created transaction using the provided reference
-      const transaction = await Transaction.findOne({
-        $or: [
-          { transactionID: transactionData.transactionID },
-          { transactionIDForDownPayment: transactionData.transactionID },
-        ],
+      if (!transactionData.paymentType) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required fields: paymentType is required",
+        });
+      }
+
+      if (!transactionData.amount) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing required fields: amount is required",
+        });
+      }
+
+      // Find any existing transaction for this job and transactionType
+      const existingTransaction = await Transaction.findOne({
+        jobId: transactionData.jobId,
+        paymentType: transactionData.paymentType,
       });
 
-      // We only initiate a payment for an existing transaction; no creation/update here
-      if (!transaction) {
-        return res.status(500).json({
+      console.log("existingTransaction ==>", existingTransaction);
+
+      let transaction: any;
+
+      if (existingTransaction == null) {
+        return res.status(400).json({
           success: false,
-          message:
-            "Transaction not found for the provided referenceID; unable to initiate payment",
+          message: "Transaction not found Please Try Again",
         });
+      }
+
+      if (existingTransaction) {
+        // Reuse and optionally update existing transaction data (excluding _id)
+        const { _id, ...updateData } = transactionData;
+        transaction = await Transaction.findByIdAndUpdate(
+          existingTransaction._id,
+          updateData,
+          { new: true, runValidators: true }
+        );
+      } else {
+        // Create a new transaction for this job and transactionType
+        transaction = new Transaction(transactionData);
+        await transaction.save();
       }
 
       const chapaSecret =
