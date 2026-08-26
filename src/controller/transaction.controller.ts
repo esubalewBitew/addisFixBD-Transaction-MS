@@ -7,6 +7,7 @@ import {
   TransactionSummary,
 } from "../config/types/transaction";
 import mongoose from "mongoose";
+import crypto from "crypto";
 
 import utils from "../lib/utils";
 import EventEmitter from "node:events";
@@ -145,13 +146,6 @@ export class TransactionController {
 
       let transaction: any;
 
-      if (existingTransaction == null) {
-        return res.status(400).json({
-          success: false,
-          message: "Transaction not found Please Try Again",
-        });
-      }
-
       if (existingTransaction) {
         // Reuse and optionally update existing transaction data (excluding _id)
         const { _id, ...updateData } = transactionData;
@@ -161,14 +155,34 @@ export class TransactionController {
           { new: true, runValidators: true }
         );
       } else {
-        // Create a new transaction for this job and transactionType
-        transaction = new Transaction(transactionData);
+        // No transaction exists yet for this job/paymentType (the normal
+        // case the first time a customer taps "Pay Now") - create one now,
+        // filling in the fields the schema requires that the client
+        // doesn't (and shouldn't have to) send.
+        const user = (req as any)._user;
+        const isDownPayment = transactionData.paymentType === "downPayment";
+
+        transaction = new Transaction({
+          ...transactionData,
+          userCode: user?.userCode || user?.phoneNumber || "N/A",
+          phoneNumber:
+            transactionData.phone_number || user?.phoneNumber || "",
+          debitAccountHolderName: user?.fullName || "Customer",
+          creditAccountNumber:
+            process.env.CHAPA_MERCHANT_ACCOUNT || "ADDISFIX-CHAPA",
+          creditAccountHolderName: "AddisFix",
+          transactionType: transactionData.paymentType,
+          transactionReason: `${
+            isDownPayment ? "Down payment" : "Final payment"
+          } for job ${transactionData.jobId}`,
+          amountForDownPayment: isDownPayment
+            ? Number(transactionData.amount) || 0
+            : 0,
+        });
         await transaction.save();
       }
 
-      const chapaSecret =
-        process.env.CHAPA_SECRET_KEY ||
-        "CHASECK-EgmFAPq28jE6uDTUQrxleAPs1ffy907H";
+      const chapaSecret = process.env.CHAPA_SECRET_KEY;
       if (!chapaSecret) {
         return res.status(500).json({
           success: false,
@@ -176,20 +190,51 @@ export class TransactionController {
         });
       }
 
-      // Build Chapa payload based on minimal working example from Chapa docs
+      // Build Chapa payload. amount, currency, email and tx_ref are all
+      // required by Chapa's /v1/transaction/initialize endpoint - without
+      // them Chapa rejects the request and makeRequest() swallows the
+      // error, which previously surfaced as an opaque 502 here.
       const amount =
         transaction.paymentType === "downPayment"
           ? transaction.amountForDownPayment
           : transaction.amount;
 
-      const chapaPayload = {
+      const txRef: string =
+        transaction.paymentType === "downPayment"
+          ? transaction.transactionIDForDownPayment
+          : transaction.transactionID;
+
+      const user = (req as any)._user;
+      const phoneNumber: string =
+        transactionData.phone_number ||
+        transaction.creditPhoneNumber ||
+        user?.phoneNumber ||
+        "";
+      const [firstName, ...lastNameParts] = String(
+        user?.fullName || "AddisFix Customer"
+      ).split(" ");
+
+      const frontendUrl = process.env.FRONTEND_URL;
+
+      const chapaPayload: Record<string, any> = {
         amount: amount?.toString() || "0",
-        phone_number:
-          transactionData.phone_number ||
-          transaction.creditPhoneNumber ||
-          (req as any)._user?.phoneNumber ||
-          "",
+        currency: transaction.currency || "ETB",
+        // Chapa validates that the email's domain actually has mail (MX)
+        // records - AddisFix's own domains don't have any configured yet,
+        // so a synthetic "<phone>@addisfix.com" address gets rejected with
+        // "validation.email". Fall back to a domain that reliably resolves
+        // until users' real emails are collected at signup.
+        email: user?.email || `${phoneNumber || txRef}@gmail.com`,
+        tx_ref: txRef,
+        phone_number: phoneNumber,
+        first_name: firstName || "AddisFix",
+        last_name: lastNameParts.join(" ") || "Customer",
+        callback_url: `${config._VALS.baseURL}/addisfix/transaction/chapa/callback`,
       };
+
+      if (frontendUrl) {
+        chapaPayload.return_url = `${frontendUrl}/jobs/${transaction.jobId}`;
+      }
 
       const chapaResponse = await makeRequest(
         "https://api.chapa.co",
@@ -227,16 +272,50 @@ export class TransactionController {
   /**
    * Chapa callback endpoint to update transaction status.
    * This URL is used as `callback_url` when initializing the payment.
+   *
+   * This route is intentionally excluded from the JWT auth guard (see
+   * index.ts) since Chapa's servers cannot send our Bearer token. Because
+   * of that, we never trust the tx_ref/status Chapa sends us directly -
+   * for a POST webhook we verify the HMAC signature, and either way we
+   * re-verify the transaction server-to-server with Chapa's secret key
+   * before touching our own records.
    */
   static async chapaCallback(req: Request, res: Response) {
     try {
-      const { tx_ref, status } = { ...req.body, ...req.query } as any;
+      const { tx_ref } = { ...req.body, ...req.query } as any;
 
       if (!tx_ref) {
         return res.status(400).json({
           success: false,
           message: "Missing tx_ref in callback",
         });
+      }
+
+      const chapaSecret = process.env.CHAPA_SECRET_KEY;
+      if (!chapaSecret) {
+        return res.status(500).json({
+          success: false,
+          message: "Chapa secret key is not configured on the server",
+        });
+      }
+
+      // If Chapa sent this as a signed webhook (POST with a JSON body),
+      // verify the signature before doing anything else.
+      const signature =
+        (req.headers["x-chapa-signature"] as string) ||
+        (req.headers["chapa-signature"] as string);
+      if (signature && req.body && Object.keys(req.body).length > 0) {
+        const expectedSignature = crypto
+          .createHmac("sha256", chapaSecret)
+          .update(JSON.stringify(req.body))
+          .digest("hex");
+        if (expectedSignature !== signature) {
+          console.warn("Rejected Chapa callback with invalid signature");
+          return res.status(401).json({
+            success: false,
+            message: "Invalid webhook signature",
+          });
+        }
       }
 
       const transaction = await Transaction.findOne({
@@ -253,7 +332,24 @@ export class TransactionController {
         });
       }
 
-      const isSuccess = status === "success";
+      // Don't trust the status Chapa sent us in the callback body/query -
+      // re-verify with Chapa directly using our secret key.
+      const verifyResponse = await makeRequest(
+        "https://api.chapa.co",
+        `/v1/transaction/verify/${tx_ref}`,
+        "get",
+        undefined,
+        chapaSecret
+      );
+
+      if (!verifyResponse) {
+        return res.status(502).json({
+          success: false,
+          message: "Failed to verify payment with Chapa",
+        });
+      }
+
+      const isSuccess = verifyResponse.data?.data?.status === "success";
 
       if (transaction.paymentType === "downPayment") {
         transaction.transactionStatusForDownPayment = isSuccess
@@ -298,9 +394,7 @@ export class TransactionController {
         });
       }
 
-      const chapaSecret =
-        process.env.CHAPA_SECRET_KEY ||
-        "CHASECK-EgmFAPq28jE6uDTUQrxleAPs1ffy907H";
+      const chapaSecret = process.env.CHAPA_SECRET_KEY;
       if (!chapaSecret) {
         return res.status(500).json({
           success: false,
@@ -428,10 +522,10 @@ export class TransactionController {
         clientId = (req as any)._user.clientId,
         jobId = "",
         technicianId = "",
-        transactionType = "transfer",
-        transactionStatus = "pending",
-        paymentMethod = "telebirr",
-        isPaid = false,
+        transactionType = "",
+        transactionStatus = "",
+        paymentMethod = "",
+        isPaid,
         dateFrom = "",
         dateTo = "",
         amountMin = 0,
@@ -493,6 +587,177 @@ export class TransactionController {
       return res.status(500).json({
         success: false,
         message: "Error fetching transactions",
+        error: error.message,
+      });
+    }
+  }
+
+  // Get a user's payment summary - powers the "Pending Payment"/"Total Paid"
+  // cards on the mini app home screen.
+  static async getPaymentSummary(req: Request, res: Response) {
+    try {
+      const userId = (req.query.userId as string) || (req as any)._user?._id;
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "userId is required",
+        });
+      }
+
+      const summary = await Transaction.aggregate([
+        { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+        {
+          $group: {
+            _id: null,
+            totalPending: {
+              $sum: {
+                $add: [
+                  {
+                    $cond: [
+                      {
+                        $and: [
+                          { $eq: ["$paymentType", "downPayment"] },
+                          { $eq: ["$isPaidForDownPayment", false] },
+                          { $eq: ["$transactionStatusForDownPayment", "pending"] },
+                        ],
+                      },
+                      { $ifNull: ["$amountForDownPayment", 0] },
+                      0,
+                    ],
+                  },
+                  {
+                    $cond: [
+                      {
+                        $and: [
+                          { $eq: ["$paymentType", "finalPayment"] },
+                          { $eq: ["$isPaid", false] },
+                          { $eq: ["$transactionStatus", "pending"] },
+                        ],
+                      },
+                      { $ifNull: ["$amount", 0] },
+                      0,
+                    ],
+                  },
+                ],
+              },
+            },
+            totalPaid: {
+              $sum: {
+                $add: [
+                  {
+                    $cond: [
+                      { $eq: ["$isPaidForDownPayment", true] },
+                      { $ifNull: ["$amountForDownPayment", 0] },
+                      0,
+                    ],
+                  },
+                  {
+                    $cond: [
+                      { $eq: ["$isPaid", true] },
+                      { $ifNull: ["$amount", 0] },
+                      0,
+                    ],
+                  },
+                ],
+              },
+            },
+            unpaidJobIds: {
+              $addToSet: {
+                $cond: [
+                  {
+                    $or: [
+                      {
+                        $and: [
+                          { $eq: ["$paymentType", "downPayment"] },
+                          { $eq: ["$isPaidForDownPayment", false] },
+                          { $eq: ["$transactionStatusForDownPayment", "pending"] },
+                        ],
+                      },
+                      {
+                        $and: [
+                          { $eq: ["$paymentType", "finalPayment"] },
+                          { $eq: ["$isPaid", false] },
+                          { $eq: ["$transactionStatus", "pending"] },
+                        ],
+                      },
+                    ],
+                  },
+                  "$jobId",
+                  "$$REMOVE",
+                ],
+              },
+            },
+          },
+        },
+      ]);
+
+      const result = summary[0] || {
+        totalPending: 0,
+        totalPaid: 0,
+        unpaidJobIds: [],
+      };
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          totalPending: result.totalPending || 0,
+          totalPaid: result.totalPaid || 0,
+          unpaidJobs: (result.unpaidJobIds || []).length,
+        },
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: "Error generating payment summary",
+        error: error.message,
+      });
+    }
+  }
+
+  // List a user's jobs that still have a payment awaiting completion -
+  // powers the "Pending Payment" listing screen. "Pending" here is
+  // type-aware: a downPayment transaction's completion only ever updates
+  // isPaidForDownPayment/transactionStatusForDownPayment, never the plain
+  // isPaid/transactionStatus fields, so a naive isPaid=false filter on
+  // get-transactions would keep showing completed down payments as pending.
+  static async getPendingPayments(req: Request, res: Response) {
+    try {
+      const userId = (req.query.userId as string) || (req as any)._user?._id;
+
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: "userId is required",
+        });
+      }
+
+      const transactions = await Transaction.find({
+        userId,
+        $or: [
+          {
+            paymentType: "downPayment",
+            isPaidForDownPayment: false,
+            transactionStatusForDownPayment: "pending",
+          },
+          {
+            paymentType: "finalPayment",
+            isPaid: false,
+            transactionStatus: "pending",
+          },
+        ],
+      })
+        .sort({ transactionDate: -1 })
+        .populate("jobId", "jobTitle jobDescription jobPrice jobStatus");
+
+      return res.status(200).json({
+        success: true,
+        data: transactions,
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching pending payments",
         error: error.message,
       });
     }

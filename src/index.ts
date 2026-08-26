@@ -53,6 +53,9 @@ async function validateDBConnection() {
     authenticate().unless({
       path: [
          "/addisfix/transaction/healthcheck",
+         // Chapa's webhook servers can't send our JWT; this route verifies
+         // the request instead via the Chapa webhook signature header.
+         "/addisfix/transaction/chapa/callback",
       ],
     })
   );

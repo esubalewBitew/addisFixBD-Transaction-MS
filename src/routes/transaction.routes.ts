@@ -9,6 +9,8 @@ router.post("/initiate-transaction", TransactionController.initiatePayment);
 router.post("/chapa/callback", TransactionController.chapaCallback);
 router.put("/confirm-transaction", TransactionController.confirmTransaction);
 router.get("/get-transactions", TransactionController.getTransactions);
+router.get("/payment-summary", TransactionController.getPaymentSummary);
+router.get("/pending-payments", TransactionController.getPendingPayments);
 router.get("/get-transaction-by-id", TransactionController.getTransactionById);
 router.put("/update-transaction", TransactionController.updateTransaction);
 router.delete("/delete-transaction", TransactionController.deleteTransaction);
