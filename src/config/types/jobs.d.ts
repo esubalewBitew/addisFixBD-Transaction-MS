@@ -47,6 +47,7 @@ import {
     jobAssignedTechnicianCity: string;
     jobAssignedTechnicianState: string;
     jobImages: string[];
+    jobPaymentStatus?: "Pending" | "Completed" | "half" | "Failed" | string;
   }
 
   export type Jobs = IJobs & Document;

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import Transaction from "../models/transaction.model";
+import Jobs from "../models/jobs.model";
 import {
   CreateTransactionInput,
   UpdateTransactionInput,
@@ -14,6 +15,14 @@ import EventEmitter from "node:events";
 import Joi from "joi";
 import makeRequest from "../utils/axiosClient";
 import config from "../config";
+import {
+  applyVerifiedChapaStatus,
+  buildChapaTxRef,
+  extractCallbackTxRef,
+  findTransactionByTxRef,
+  verifyWithChapa,
+  resolvePaymentTypeFromTxRef,
+} from "../utils/chapa";
 
 export class TransactionController {
   // Create a new transaction
@@ -136,10 +145,9 @@ export class TransactionController {
         });
       }
 
-      // Find any existing transaction for this job and transactionType
+      // One transaction document per job
       const existingTransaction = await Transaction.findOne({
         jobId: transactionData.jobId,
-        paymentType: transactionData.paymentType,
       });
 
       console.log("existingTransaction ==>", existingTransaction);
@@ -182,6 +190,28 @@ export class TransactionController {
         await transaction.save();
       }
 
+      const paymentType = transactionData.paymentType as
+        | "downPayment"
+        | "finalPayment";
+
+      // Fresh tx_ref on every attempt — Chapa rejects duplicate refs after abandoned checkout
+      const txRef = buildChapaTxRef(String(transaction._id), paymentType);
+      const chapaUpdate: Record<string, unknown> = {};
+      if (paymentType === "downPayment") {
+        chapaUpdate.transactionIDForDownPayment = txRef;
+        chapaUpdate.transactionStatusForDownPayment = "processing";
+        chapaUpdate.isFailedForDownPayment = false;
+      } else {
+        chapaUpdate.transactionID = txRef;
+        chapaUpdate.transactionStatus = "processing";
+        chapaUpdate.isFailed = false;
+      }
+      transaction = await Transaction.findByIdAndUpdate(
+        transaction._id,
+        chapaUpdate,
+        { new: true, runValidators: true }
+      );
+
       const chapaSecret = process.env.CHAPA_SECRET_KEY;
       if (!chapaSecret) {
         return res.status(500).json({
@@ -195,14 +225,9 @@ export class TransactionController {
       // them Chapa rejects the request and makeRequest() swallows the
       // error, which previously surfaced as an opaque 502 here.
       const amount =
-        transaction.paymentType === "downPayment"
-          ? transaction.amountForDownPayment
-          : transaction.amount;
-
-      const txRef: string =
-        transaction.paymentType === "downPayment"
-          ? transaction.transactionIDForDownPayment
-          : transaction.transactionID;
+        paymentType === "downPayment"
+          ? transaction?.amountForDownPayment
+          : transaction?.amount;
 
       const user = (req as any)._user;
       const phoneNumber: string =
@@ -214,27 +239,28 @@ export class TransactionController {
         user?.fullName || "AddisFix Customer"
       ).split(" ");
 
-      const frontendUrl = process.env.FRONTEND_URL;
+      const miniAppUrl = (
+        process.env.MINI_APP_URL ||
+        process.env.FRONTEND_URL ||
+        "http://localhost:3000"
+      ).replace(/\/$/, "");
 
       const chapaPayload: Record<string, any> = {
         amount: amount?.toString() || "0",
         currency: transaction.currency || "ETB",
-        // Chapa validates that the email's domain actually has mail (MX)
-        // records - AddisFix's own domains don't have any configured yet,
-        // so a synthetic "<phone>@addisfix.com" address gets rejected with
-        // "validation.email". Fall back to a domain that reliably resolves
-        // until users' real emails are collected at signup.
         email: user?.email || `${phoneNumber || txRef}@gmail.com`,
         tx_ref: txRef,
         phone_number: phoneNumber,
         first_name: firstName || "AddisFix",
         last_name: lastNameParts.join(" ") || "Customer",
         callback_url: `${config._VALS.baseURL}/addisfix/transaction/chapa/callback`,
+        return_url: `${miniAppUrl}/payments/success?tx_ref=${encodeURIComponent(txRef)}`,
+        customization: {
+          title: "AddisFix Payment",
+          description:
+            paymentType === "downPayment" ? "Down payment" : "Final payment",
+        },
       };
-
-      if (frontendUrl) {
-        chapaPayload.return_url = `${frontendUrl}/jobs/${transaction.jobId}`;
-      }
 
       const chapaResponse = await makeRequest(
         "https://api.chapa.co",
@@ -244,10 +270,13 @@ export class TransactionController {
         chapaSecret
       );
 
-      if (!chapaResponse) {
+      if (!chapaResponse || chapaResponse.data?.status !== "success") {
+        const chapaMessage =
+          chapaResponse?.data?.message || "Failed to initiate payment with Chapa";
         return res.status(502).json({
           success: false,
-          message: "Failed to initiate payment with Chapa",
+          message: chapaMessage,
+          error: chapaResponse?.data,
         });
       }
 
@@ -256,6 +285,8 @@ export class TransactionController {
         message: "Payment initialized successfully",
         data: {
           transaction,
+          tx_ref: txRef,
+          return_url: chapaPayload.return_url,
           chapa: chapaResponse.data,
         },
       });
@@ -282,12 +313,12 @@ export class TransactionController {
    */
   static async chapaCallback(req: Request, res: Response) {
     try {
-      const { tx_ref } = { ...req.body, ...req.query } as any;
+      const txRef = extractCallbackTxRef(req.body, req.query);
 
-      if (!tx_ref) {
+      if (!txRef) {
         return res.status(400).json({
           success: false,
-          message: "Missing tx_ref in callback",
+          message: "Missing tx_ref/trx_ref in callback",
         });
       }
 
@@ -318,12 +349,7 @@ export class TransactionController {
         }
       }
 
-      const transaction = await Transaction.findOne({
-        $or: [
-          { transactionIDForDownPayment: tx_ref },
-          { transactionID: tx_ref },
-        ],
-      });
+      const transaction = await findTransactionByTxRef(txRef);
 
       if (!transaction) {
         return res.status(404).json({
@@ -336,7 +362,7 @@ export class TransactionController {
       // re-verify with Chapa directly using our secret key.
       const verifyResponse = await makeRequest(
         "https://api.chapa.co",
-        `/v1/transaction/verify/${tx_ref}`,
+        `/v1/transaction/verify/${encodeURIComponent(txRef)}`,
         "get",
         undefined,
         chapaSecret
@@ -349,26 +375,28 @@ export class TransactionController {
         });
       }
 
-      const isSuccess = verifyResponse.data?.data?.status === "success";
-
-      if (transaction.paymentType === "downPayment") {
-        transaction.transactionStatusForDownPayment = isSuccess
-          ? "completed"
-          : "failed";
-        transaction.isPaidForDownPayment = isSuccess;
-        transaction.isFailedForDownPayment = !isSuccess;
-      } else {
-        transaction.transactionStatus = isSuccess ? "completed" : "failed";
-        transaction.isPaid = isSuccess;
-        transaction.isFailed = !isSuccess;
+      const chapaStatus = verifyResponse.data?.data?.status;
+      if (!chapaStatus) {
+        return res.status(502).json({
+          success: false,
+          message: "Invalid verification response from Chapa",
+        });
       }
 
-      await transaction.save();
+      const paymentType = resolvePaymentTypeFromTxRef(transaction, txRef);
+      const updatedTransaction = await applyVerifiedChapaStatus(
+        transaction,
+        paymentType,
+        chapaStatus
+      );
 
       return res.status(200).json({
         success: true,
         message: "Transaction status updated from Chapa callback",
-        data: transaction,
+        data: {
+          transaction: updatedTransaction,
+          chapaStatus,
+        },
       });
     } catch (error: any) {
       console.error("Error handling Chapa callback:", error);
@@ -394,21 +422,7 @@ export class TransactionController {
         });
       }
 
-      const chapaSecret = process.env.CHAPA_SECRET_KEY;
-      if (!chapaSecret) {
-        return res.status(500).json({
-          success: false,
-          message: "Chapa secret key is not configured on the server",
-        });
-      }
-
-      const chapaResponse = await makeRequest(
-        "https://api.chapa.co",
-        `/v1/transaction/verify/${txRef}`,
-        "get",
-        undefined,
-        chapaSecret
-      );
+      const chapaResponse = await verifyWithChapa(txRef);
 
       if (!chapaResponse) {
         return res.status(502).json({
@@ -417,33 +431,23 @@ export class TransactionController {
         });
       }
 
-      // Optionally sync status to our transaction
       const chapaStatus = chapaResponse.data?.data?.status;
-      const transaction = await Transaction.findOne({
-        $or: [{ transactionIDForDownPayment: txRef }, { transactionID: txRef }],
-      });
+      const transaction = await findTransactionByTxRef(txRef);
 
       if (transaction && chapaStatus) {
-        const isSuccess = chapaStatus === "success";
-        if (transaction.paymentType === "downPayment") {
-          transaction.transactionStatusForDownPayment = isSuccess
-            ? "completed"
-            : "failed";
-          transaction.isPaidForDownPayment = isSuccess;
-          transaction.isFailedForDownPayment = !isSuccess;
-        } else {
-          transaction.transactionStatus = isSuccess ? "completed" : "failed";
-          transaction.isPaid = isSuccess;
-          transaction.isFailed = !isSuccess;
-        }
-        await transaction.save();
+        const paymentType = resolvePaymentTypeFromTxRef(transaction, txRef);
+        await applyVerifiedChapaStatus(transaction, paymentType, chapaStatus);
       }
+
+      const refreshedTransaction = await findTransactionByTxRef(txRef);
 
       return res.status(200).json({
         success: true,
         data: {
           chapa: chapaResponse.data,
-          transaction,
+          chapaStatus,
+          transaction: refreshedTransaction,
+          paymentSuccessful: chapaStatus === "success",
         },
       });
     } catch (error: any) {
@@ -723,36 +727,73 @@ export class TransactionController {
   // get-transactions would keep showing completed down payments as pending.
   static async getPendingPayments(req: Request, res: Response) {
     try {
-      const userId = (req.query.userId as string) || (req as any)._user?._id;
-
-      if (!userId) {
-        return res.status(400).json({
+      const authUser = (req as any)._user;
+      if (!authUser?._id) {
+        return res.status(401).json({
           success: false,
-          message: "userId is required",
+          message: "Unauthorized",
         });
       }
 
-      const transactions = await Transaction.find({
-        userId,
-        $or: [
-          {
+      const transactions = await Transaction.find({ userId: authUser._id })
+        .populate({
+          path: "jobId",
+          select:
+            "jobTitle jobDescription jobPrice jobDownPayment jobPaymentStatus jobServiceCategory jobStatus jobLocation",
+        })
+        .sort({ updatedAt: -1 })
+        .lean();
+
+      const pendingPayments: any[] = [];
+
+      for (const txn of transactions) {
+        const populatedJob = txn.jobId as any;
+        if (
+          populatedJob?.jobStatus &&
+          String(populatedJob.jobStatus).toLowerCase() === "cancelled"
+        ) {
+          continue;
+        }
+
+        const downAmount = Number(txn.amountForDownPayment || 0);
+        const downPending =
+          downAmount > 0 &&
+          !txn.isPaidForDownPayment &&
+          txn.transactionStatusForDownPayment !== "completed" &&
+          txn.transactionStatusForDownPayment !== "cancelled";
+
+        if (downPending) {
+          pendingPayments.push({
+            ...txn,
             paymentType: "downPayment",
-            isPaidForDownPayment: false,
-            transactionStatusForDownPayment: "pending",
-          },
-          {
+            amountDue: downAmount,
+            readyToPay: true,
+          });
+        }
+
+        const finalAmount = Number(txn.amount || 0);
+        const downSatisfied =
+          downAmount === 0 || txn.isPaidForDownPayment === true;
+        const finalPending =
+          finalAmount > 0 &&
+          !txn.isPaid &&
+          txn.transactionStatus !== "completed" &&
+          txn.transactionStatus !== "cancelled" &&
+          downSatisfied;
+
+        if (finalPending) {
+          pendingPayments.push({
+            ...txn,
             paymentType: "finalPayment",
-            isPaid: false,
-            transactionStatus: "pending",
-          },
-        ],
-      })
-        .sort({ transactionDate: -1 })
-        .populate("jobId", "jobTitle jobDescription jobPrice jobStatus");
+            amountDue: finalAmount,
+            readyToPay: true,
+          });
+        }
+      }
 
       return res.status(200).json({
         success: true,
-        data: transactions,
+        data: pendingPayments,
       });
     } catch (error: any) {
       return res.status(500).json({
@@ -1065,6 +1106,72 @@ export class TransactionController {
       return res.status(500).json({
         success: false,
         message: "Error cancelling transaction",
+        error: error.message,
+      });
+    }
+  }
+
+  static async rejectPayment(req: Request, res: Response) {
+    try {
+      const authUser = (req as any)._user;
+      if (!authUser?._id) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized",
+        });
+      }
+
+      const { jobId, paymentType } = req.body as {
+        jobId?: string;
+        paymentType?: "downPayment" | "finalPayment";
+      };
+
+      if (!jobId || !paymentType) {
+        return res.status(400).json({
+          success: false,
+          message: "jobId and paymentType are required",
+        });
+      }
+
+      const transaction = await Transaction.findOne({
+        jobId,
+        userId: authUser._id,
+      });
+
+      if (!transaction) {
+        return res.status(404).json({
+          success: false,
+          message: "Transaction not found for this job",
+        });
+      }
+
+      if (paymentType === "downPayment") {
+        transaction.transactionStatusForDownPayment = "cancelled";
+        transaction.isFailedForDownPayment = true;
+        transaction.isPaidForDownPayment = false;
+      } else {
+        transaction.transactionStatus = "cancelled";
+        transaction.isFailed = true;
+        transaction.isPaid = false;
+      }
+
+      await transaction.save();
+
+      await Jobs.findByIdAndUpdate(jobId, {
+        jobPaymentStatus: "Failed",
+        jobStatus: "Cancelled",
+        jobUpdatedAt: new Date(),
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Payment request rejected successfully",
+        data: transaction,
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: "Error rejecting payment",
         error: error.message,
       });
     }

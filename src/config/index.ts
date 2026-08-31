@@ -4,9 +4,15 @@ dotenv.config();
 import { TopLevelConfig, Vals } from "./types/config";
 import path from "path";
 
+const resolveMongoUrl = (): string => {
+  const url =
+    process.env.MONGODB_URL?.trim() ||
+    process.env.MONGODB_URL_PROD?.trim();
+  return url || "mongodb://localhost:27017/AddisFix_Db";
+};
+
 const getConfig = (): TopLevelConfig => ({
-  MONGODB_URL:
-    process.env.MONGODB_URL_PROD || "mongodb://localhost:27017/AddisFix_Db",
+  MONGODB_URL: resolveMongoUrl(),
 
   _VALS: {
     SMSSender: process.env.SMS_SENDER || "AddisFix",

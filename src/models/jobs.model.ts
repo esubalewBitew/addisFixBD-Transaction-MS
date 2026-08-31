@@ -35,6 +35,11 @@ const JobsSchema = new Schema<Jobs>({
     jobAssignedTechnicianCity: { type: String },
     jobAssignedTechnicianState: { type: String },
     jobImages: { type: [String] },
+    jobPaymentStatus: {
+        type: String,
+        enum: ["Pending", "Completed", "half", "Failed"],
+        default: "Pending",
+    },
 });
 
 JobsSchema.plugin(modules.paginator);
