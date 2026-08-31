@@ -748,6 +748,9 @@ export class TransactionController {
 
       for (const txn of transactions) {
         const populatedJob = txn.jobId as any;
+        if (!populatedJob) {
+          continue;
+        }
         if (
           populatedJob?.jobStatus &&
           String(populatedJob.jobStatus).toLowerCase() === "cancelled"
