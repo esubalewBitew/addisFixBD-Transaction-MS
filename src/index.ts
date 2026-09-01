@@ -48,15 +48,16 @@ async function validateDBConnection() {
     next();
   });
 
-  //Free From Guard route
+  // Free routes — Chapa verify is public (tx_ref only) so success page works
+  // after external/in-app browser return without a JWT.
   app.use(
     authenticate().unless({
       path: [
-         "/addisfix/transaction/healthcheck",
-         // Chapa's webhook servers can't send our JWT; this route verifies
-         // the request instead via the Chapa webhook signature header.
-         "/addisfix/transaction/chapa/callback",
+        "/addisfix/transaction/healthcheck",
+        "/addisfix/transaction/chapa/callback",
       ],
+      custom: (req) =>
+        req.path.startsWith("/addisfix/transaction/chapa/verify/"),
     })
   );
 
