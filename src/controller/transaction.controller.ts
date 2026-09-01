@@ -23,6 +23,10 @@ import {
   verifyWithChapa,
   resolvePaymentTypeFromTxRef,
 } from "../utils/chapa";
+import {
+  buildPendingPaymentsFromJobs,
+  computeJobPaymentTotals,
+} from "../utils/payment-summary";
 
 export class TransactionController {
   // Create a new transaction
@@ -611,46 +615,34 @@ export class TransactionController {
       }
 
       const userObjectId = new mongoose.Types.ObjectId(String(userId));
-      const transactions = await Transaction.find({ userId: userObjectId }).lean();
+      const [transactions, jobs] = await Promise.all([
+        Transaction.find({ userId: userObjectId }).lean(),
+        Jobs.find({
+          jobCreatedBy: userObjectId,
+          jobStatus: {
+            $nin: ["cancelled", "Cancelled", "Declined", "declined"],
+          },
+        }).lean(),
+      ]);
+
+      const txnByJobId = new Map<string, any>();
+      for (const txn of transactions) {
+        if (txn.jobId) {
+          txnByJobId.set(String(txn.jobId), txn);
+        }
+      }
 
       let totalPending = 0;
       let totalPaid = 0;
       const unpaidJobIds = new Set<string>();
 
-      for (const txn of transactions) {
-        const downAmount = Number(txn.amountForDownPayment || 0);
-        const downPending =
-          downAmount > 0 &&
-          !txn.isPaidForDownPayment &&
-          txn.transactionStatusForDownPayment !== "completed" &&
-          txn.transactionStatusForDownPayment !== "cancelled";
-
-        if (downPending) {
-          totalPending += downAmount;
-          if (txn.jobId) unpaidJobIds.add(String(txn.jobId));
-        }
-
-        if (txn.isPaidForDownPayment) {
-          totalPaid += downAmount;
-        }
-
-        const finalAmount = Number(txn.amount || 0);
-        const downSatisfied =
-          downAmount === 0 || txn.isPaidForDownPayment === true;
-        const finalPending =
-          finalAmount > 0 &&
-          !txn.isPaid &&
-          txn.transactionStatus !== "completed" &&
-          txn.transactionStatus !== "cancelled" &&
-          downSatisfied;
-
-        if (finalPending) {
-          totalPending += finalAmount;
-          if (txn.jobId) unpaidJobIds.add(String(txn.jobId));
-        }
-
-        if (txn.isPaid) {
-          totalPaid += finalAmount;
+      for (const job of jobs) {
+        const txn = txnByJobId.get(String(job._id)) || null;
+        const totals = computeJobPaymentTotals(job, txn);
+        totalPending += totals.pending;
+        totalPaid += totals.paid;
+        if (totals.pending > 0) {
+          unpaidJobIds.add(String(job._id));
         }
       }
 
@@ -687,64 +679,37 @@ export class TransactionController {
         });
       }
 
-      const transactions = await Transaction.find({ userId: authUser._id })
-        .populate({
-          path: "jobId",
-          select:
-            "jobTitle jobDescription jobPrice jobDownPayment jobPaymentStatus jobServiceCategory jobStatus jobLocation",
+      const userObjectId = new mongoose.Types.ObjectId(String(authUser._id));
+
+      const [transactions, jobs] = await Promise.all([
+        Transaction.find({ userId: userObjectId }).lean(),
+        Jobs.find({
+          jobCreatedBy: userObjectId,
+          jobStatus: {
+            $nin: ["cancelled", "Cancelled", "Declined", "declined"],
+          },
         })
-        .sort({ updatedAt: -1 })
-        .lean();
+          .select(
+            "jobTitle jobDescription jobPrice jobDownPayment jobRemainingAmount jobAdditionalCharges jobPaymentStatus jobServiceCategory jobStatus jobLocation jobCreatedBy"
+          )
+          .sort({ jobUpdatedAt: -1 })
+          .lean(),
+      ]);
 
-      const pendingPayments: any[] = [];
-
-      for (const txn of transactions) {
-        const populatedJob = txn.jobId as any;
-        if (!populatedJob) {
-          continue;
-        }
-        if (
-          populatedJob?.jobStatus &&
-          String(populatedJob.jobStatus).toLowerCase() === "cancelled"
-        ) {
-          continue;
-        }
-
-        const downAmount = Number(txn.amountForDownPayment || 0);
-        const downPending =
-          downAmount > 0 &&
-          !txn.isPaidForDownPayment &&
-          txn.transactionStatusForDownPayment !== "completed" &&
-          txn.transactionStatusForDownPayment !== "cancelled";
-
-        if (downPending) {
-          pendingPayments.push({
-            ...txn,
-            paymentType: "downPayment",
-            amountDue: downAmount,
-            readyToPay: true,
-          });
-        }
-
-        const finalAmount = Number(txn.amount || 0);
-        const downSatisfied =
-          downAmount === 0 || txn.isPaidForDownPayment === true;
-        const finalPending =
-          finalAmount > 0 &&
-          !txn.isPaid &&
-          txn.transactionStatus !== "completed" &&
-          txn.transactionStatus !== "cancelled" &&
-          downSatisfied;
-
-        if (finalPending) {
-          pendingPayments.push({
-            ...txn,
-            paymentType: "finalPayment",
-            amountDue: finalAmount,
-            readyToPay: true,
-          });
-        }
-      }
+      const pendingEntries = buildPendingPaymentsFromJobs(jobs, transactions);
+      const pendingPayments = pendingEntries.map(
+        ({ job, paymentType, amountDue, transaction }) => ({
+          ...(transaction || {}),
+          _id:
+            transaction?._id ||
+            `pending-${String(job._id)}-${paymentType}`,
+          jobId: job,
+          paymentType,
+          amountDue,
+          readyToPay: true,
+          userId: authUser._id,
+        })
+      );
 
       return res.status(200).json({
         success: true,
