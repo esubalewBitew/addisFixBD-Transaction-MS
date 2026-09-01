@@ -69,6 +69,11 @@ export const computeJobPaymentTotals = (
     return { pending: 0, paid: 0, pendingItems: [] };
   }
 
+  const status = paymentStatus(job);
+  if (status === "completed" || status === "paid") {
+    return { pending: 0, paid: 0, pendingItems: [] };
+  }
+
   const downAmount = Math.max(
     toNumber(txn?.amountForDownPayment),
     toNumber(job.jobDownPayment)
@@ -105,7 +110,11 @@ export const computeJobPaymentTotals = (
     finalDue = downAmount > 0 && downPaid ? Math.max(priceAmount - downAmount, 0) : priceAmount;
   }
 
-  if (finalDue <= 0 && toNumber(txn?.amount) > 0) {
+  if (
+    finalDue <= 0 &&
+    toNumber(txn?.amount) > 0 &&
+    (priceAmount > 0 || remainingAmount > 0)
+  ) {
     finalDue = toNumber(txn?.amount);
   }
 
