@@ -600,7 +600,8 @@ export class TransactionController {
   // cards on the mini app home screen.
   static async getPaymentSummary(req: Request, res: Response) {
     try {
-      const userId = (req.query.userId as string) || (req as any)._user?._id;
+      const authUser = (req as any)._user;
+      const userId = authUser?._id || (req.query.userId as string);
 
       if (!userId) {
         return res.status(400).json({
@@ -609,105 +610,56 @@ export class TransactionController {
         });
       }
 
-      const summary = await Transaction.aggregate([
-        { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-        {
-          $group: {
-            _id: null,
-            totalPending: {
-              $sum: {
-                $add: [
-                  {
-                    $cond: [
-                      {
-                        $and: [
-                          { $eq: ["$paymentType", "downPayment"] },
-                          { $eq: ["$isPaidForDownPayment", false] },
-                          { $eq: ["$transactionStatusForDownPayment", "pending"] },
-                        ],
-                      },
-                      { $ifNull: ["$amountForDownPayment", 0] },
-                      0,
-                    ],
-                  },
-                  {
-                    $cond: [
-                      {
-                        $and: [
-                          { $eq: ["$paymentType", "finalPayment"] },
-                          { $eq: ["$isPaid", false] },
-                          { $eq: ["$transactionStatus", "pending"] },
-                        ],
-                      },
-                      { $ifNull: ["$amount", 0] },
-                      0,
-                    ],
-                  },
-                ],
-              },
-            },
-            totalPaid: {
-              $sum: {
-                $add: [
-                  {
-                    $cond: [
-                      { $eq: ["$isPaidForDownPayment", true] },
-                      { $ifNull: ["$amountForDownPayment", 0] },
-                      0,
-                    ],
-                  },
-                  {
-                    $cond: [
-                      { $eq: ["$isPaid", true] },
-                      { $ifNull: ["$amount", 0] },
-                      0,
-                    ],
-                  },
-                ],
-              },
-            },
-            unpaidJobIds: {
-              $addToSet: {
-                $cond: [
-                  {
-                    $or: [
-                      {
-                        $and: [
-                          { $eq: ["$paymentType", "downPayment"] },
-                          { $eq: ["$isPaidForDownPayment", false] },
-                          { $eq: ["$transactionStatusForDownPayment", "pending"] },
-                        ],
-                      },
-                      {
-                        $and: [
-                          { $eq: ["$paymentType", "finalPayment"] },
-                          { $eq: ["$isPaid", false] },
-                          { $eq: ["$transactionStatus", "pending"] },
-                        ],
-                      },
-                    ],
-                  },
-                  "$jobId",
-                  "$$REMOVE",
-                ],
-              },
-            },
-          },
-        },
-      ]);
+      const userObjectId = new mongoose.Types.ObjectId(String(userId));
+      const transactions = await Transaction.find({ userId: userObjectId }).lean();
 
-      const result = summary[0] || {
-        totalPending: 0,
-        totalPaid: 0,
-        unpaidJobIds: [],
-      };
+      let totalPending = 0;
+      let totalPaid = 0;
+      const unpaidJobIds = new Set<string>();
+
+      for (const txn of transactions) {
+        const downAmount = Number(txn.amountForDownPayment || 0);
+        const downPending =
+          downAmount > 0 &&
+          !txn.isPaidForDownPayment &&
+          txn.transactionStatusForDownPayment !== "completed" &&
+          txn.transactionStatusForDownPayment !== "cancelled";
+
+        if (downPending) {
+          totalPending += downAmount;
+          if (txn.jobId) unpaidJobIds.add(String(txn.jobId));
+        }
+
+        if (txn.isPaidForDownPayment) {
+          totalPaid += downAmount;
+        }
+
+        const finalAmount = Number(txn.amount || 0);
+        const downSatisfied =
+          downAmount === 0 || txn.isPaidForDownPayment === true;
+        const finalPending =
+          finalAmount > 0 &&
+          !txn.isPaid &&
+          txn.transactionStatus !== "completed" &&
+          txn.transactionStatus !== "cancelled" &&
+          downSatisfied;
+
+        if (finalPending) {
+          totalPending += finalAmount;
+          if (txn.jobId) unpaidJobIds.add(String(txn.jobId));
+        }
+
+        if (txn.isPaid) {
+          totalPaid += finalAmount;
+        }
+      }
 
       return res.status(200).json({
         success: true,
         data: {
-          totalPending: result.totalPending || 0,
-          totalPaid: result.totalPaid || 0,
-          unpaidJobs: (result.unpaidJobIds || []).length,
+          totalPending,
+          totalPaid,
+          unpaidJobs: unpaidJobIds.size,
         },
       });
     } catch (error: any) {
