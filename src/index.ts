@@ -56,7 +56,7 @@ async function validateDBConnection() {
         "/addisfix/transaction/healthcheck",
         "/addisfix/transaction/chapa/callback",
       ],
-      custom: (req) =>
+      custom: (req: Request) =>
         req.path.startsWith("/addisfix/transaction/chapa/verify/"),
     })
   );
