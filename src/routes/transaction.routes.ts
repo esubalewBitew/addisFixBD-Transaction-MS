@@ -12,6 +12,7 @@ router.put("/confirm-transaction", TransactionController.confirmTransaction);
 router.get("/get-transactions", TransactionController.getTransactions);
 router.get("/payment-summary", TransactionController.getPaymentSummary);
 router.get("/pending-payments", TransactionController.getPendingPayments);
+router.get("/paid-payments", TransactionController.getPaidPayments);
 router.post("/reject-payment", TransactionController.rejectPayment);
 router.get("/get-transaction-by-id", TransactionController.getTransactionById);
 router.put("/update-transaction", TransactionController.updateTransaction);

@@ -25,6 +25,7 @@ import {
 } from "../utils/chapa";
 import {
   buildPendingPaymentsFromJobs,
+  buildPaidPaymentsFromJobs,
   computeJobPaymentTotals,
 } from "../utils/payment-summary";
 
@@ -719,6 +720,66 @@ export class TransactionController {
       return res.status(500).json({
         success: false,
         message: "Error fetching pending payments",
+        error: error.message,
+      });
+    }
+  }
+
+  // Paid payment history for the logged-in user — powers Total Paid list.
+  // Type-aware: completed down payments use isPaidForDownPayment; final uses isPaid.
+  static async getPaidPayments(req: Request, res: Response) {
+    try {
+      const authUser = (req as any)._user;
+      if (!authUser?._id) {
+        return res.status(401).json({
+          success: false,
+          message: "Unauthorized",
+        });
+      }
+
+      const userObjectId = new mongoose.Types.ObjectId(String(authUser._id));
+
+      const [transactions, jobs] = await Promise.all([
+        Transaction.find({ userId: userObjectId }).lean(),
+        Jobs.find({
+          jobCreatedBy: userObjectId,
+          jobStatus: {
+            $nin: ["cancelled", "Cancelled", "Declined", "declined"],
+          },
+        })
+          .select(
+            "jobTitle jobDescription jobPrice jobDownPayment jobRemainingAmount jobAdditionalCharges jobPaymentStatus jobServiceCategory jobStatus jobLocation jobCreatedBy jobUpdatedAt"
+          )
+          .sort({ jobUpdatedAt: -1 })
+          .lean(),
+      ]);
+
+      const paidEntries = buildPaidPaymentsFromJobs(jobs, transactions);
+      const paidPayments = paidEntries.map(
+        ({ job, paymentType, amountPaid, transaction, paidAt }) => ({
+          ...(transaction || {}),
+          _id:
+            transaction?._id ||
+            `paid-${String(job._id)}-${paymentType}`,
+          jobId: job,
+          paymentType,
+          amountPaid,
+          amountDue: amountPaid,
+          paidAt: paidAt || (transaction as any)?.paidAt || (transaction as any)?.updatedAt,
+          reason:
+            paymentType === "downPayment" ? "Down Payment" : "Final Payment",
+          userId: authUser._id,
+        })
+      );
+
+      return res.status(200).json({
+        success: true,
+        data: paidPayments,
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: "Error fetching paid payments",
         error: error.message,
       });
     }
