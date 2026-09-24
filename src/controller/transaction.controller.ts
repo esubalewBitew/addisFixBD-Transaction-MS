@@ -29,6 +29,93 @@ import {
   computeJobPaymentTotals,
 } from "../utils/payment-summary";
 
+/** Avoid hanging the Mini App when Atlas/Jobs collection is slow or unreachable */
+async function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  fallback: T,
+  label: string
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => {
+          console.warn(`[payment] ${label} timed out after ${ms}ms — using fallback`);
+          resolve(fallback);
+        }, ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function loadUserJobsAndTransactions(userObjectId: mongoose.Types.ObjectId) {
+  const queryOpts = { maxTimeMS: 8000 } as const;
+
+  const [transactions, jobs] = await Promise.all([
+    withTimeout(
+      Transaction.find({ userId: userObjectId })
+        .setOptions(queryOpts)
+        .lean()
+        .exec(),
+      9000,
+      [] as any[],
+      "Transaction.find"
+    ),
+    withTimeout(
+      Jobs.find({
+        jobCreatedBy: userObjectId,
+        jobStatus: {
+          $nin: ["cancelled", "Cancelled", "Declined", "declined"],
+        },
+      })
+        .select(
+          "jobTitle jobDescription jobPrice jobDownPayment jobRemainingAmount jobAdditionalCharges jobPaymentStatus jobServiceCategory jobStatus jobLocation jobCreatedBy jobUpdatedAt"
+        )
+        .sort({ jobUpdatedAt: -1 })
+        .setOptions(queryOpts)
+        .lean()
+        .exec(),
+      9000,
+      [] as any[],
+      "Jobs.find"
+    ),
+  ]);
+
+  return { transactions, jobs };
+}
+
+/** When Jobs collection is unavailable, derive rough totals from transactions alone */
+function summaryFromTransactionsOnly(transactions: any[]) {
+  let totalPaid = 0;
+  let totalPending = 0;
+  const unpaidJobIds = new Set<string>();
+
+  for (const txn of transactions) {
+    const down = Number(txn.amountForDownPayment) || 0;
+    const finalAmt = Number(txn.amount) || 0;
+    if (txn.isPaidForDownPayment) totalPaid += down;
+    else if (down > 0) {
+      totalPending += down;
+      if (txn.jobId) unpaidJobIds.add(String(txn.jobId));
+    }
+    if (txn.isPaid) totalPaid += finalAmt;
+    else if (finalAmt > 0) {
+      totalPending += finalAmt;
+      if (txn.jobId) unpaidJobIds.add(String(txn.jobId));
+    }
+  }
+
+  return {
+    totalPending,
+    totalPaid,
+    unpaidJobs: unpaidJobIds.size,
+  };
+}
+
 export class TransactionController {
   // Create a new transaction
   static async createTransaction(req: Request, res: Response) {
@@ -616,15 +703,18 @@ export class TransactionController {
       }
 
       const userObjectId = new mongoose.Types.ObjectId(String(userId));
-      const [transactions, jobs] = await Promise.all([
-        Transaction.find({ userId: userObjectId }).lean(),
-        Jobs.find({
-          jobCreatedBy: userObjectId,
-          jobStatus: {
-            $nin: ["cancelled", "Cancelled", "Declined", "declined"],
-          },
-        }).lean(),
-      ]);
+      const { transactions, jobs } = await loadUserJobsAndTransactions(
+        userObjectId
+      );
+
+      // Jobs query timed out / empty — fall back to transaction documents only
+      if (!jobs.length && transactions.length) {
+        return res.status(200).json({
+          success: true,
+          data: summaryFromTransactionsOnly(transactions),
+          source: "transactions-fallback",
+        });
+      }
 
       const txnByJobId = new Map<string, any>();
       for (const txn of transactions) {
@@ -656,6 +746,7 @@ export class TransactionController {
         },
       });
     } catch (error: any) {
+      console.error("getPaymentSummary error:", error);
       return res.status(500).json({
         success: false,
         message: "Error generating payment summary",
@@ -681,21 +772,9 @@ export class TransactionController {
       }
 
       const userObjectId = new mongoose.Types.ObjectId(String(authUser._id));
-
-      const [transactions, jobs] = await Promise.all([
-        Transaction.find({ userId: userObjectId }).lean(),
-        Jobs.find({
-          jobCreatedBy: userObjectId,
-          jobStatus: {
-            $nin: ["cancelled", "Cancelled", "Declined", "declined"],
-          },
-        })
-          .select(
-            "jobTitle jobDescription jobPrice jobDownPayment jobRemainingAmount jobAdditionalCharges jobPaymentStatus jobServiceCategory jobStatus jobLocation jobCreatedBy"
-          )
-          .sort({ jobUpdatedAt: -1 })
-          .lean(),
-      ]);
+      const { transactions, jobs } = await loadUserJobsAndTransactions(
+        userObjectId
+      );
 
       const pendingEntries = buildPendingPaymentsFromJobs(jobs, transactions);
       const pendingPayments = pendingEntries.map(
@@ -717,6 +796,7 @@ export class TransactionController {
         data: pendingPayments,
       });
     } catch (error: any) {
+      console.error("getPendingPayments error:", error);
       return res.status(500).json({
         success: false,
         message: "Error fetching pending payments",
@@ -738,21 +818,9 @@ export class TransactionController {
       }
 
       const userObjectId = new mongoose.Types.ObjectId(String(authUser._id));
-
-      const [transactions, jobs] = await Promise.all([
-        Transaction.find({ userId: userObjectId }).lean(),
-        Jobs.find({
-          jobCreatedBy: userObjectId,
-          jobStatus: {
-            $nin: ["cancelled", "Cancelled", "Declined", "declined"],
-          },
-        })
-          .select(
-            "jobTitle jobDescription jobPrice jobDownPayment jobRemainingAmount jobAdditionalCharges jobPaymentStatus jobServiceCategory jobStatus jobLocation jobCreatedBy jobUpdatedAt"
-          )
-          .sort({ jobUpdatedAt: -1 })
-          .lean(),
-      ]);
+      const { transactions, jobs } = await loadUserJobsAndTransactions(
+        userObjectId
+      );
 
       const paidEntries = buildPaidPaymentsFromJobs(jobs, transactions);
       const paidPayments = paidEntries.map(
@@ -777,6 +845,7 @@ export class TransactionController {
         data: paidPayments,
       });
     } catch (error: any) {
+      console.error("getPaidPayments error:", error);
       return res.status(500).json({
         success: false,
         message: "Error fetching paid payments",

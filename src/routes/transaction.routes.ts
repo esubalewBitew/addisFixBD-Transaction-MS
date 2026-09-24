@@ -3,6 +3,13 @@ import { TransactionController } from "../controller/transaction.controller";
 
 const router = Router();
 
+router.get("/healthcheck", (_req, res) => {
+  res.status(200).json({
+    status: 200,
+    message: "Transaction service is active",
+  });
+});
+
 // Transaction CRUD operations
 router.post("/create-transaction", TransactionController.createTransaction);
 router.post("/initiate-transaction", TransactionController.initiatePayment);
