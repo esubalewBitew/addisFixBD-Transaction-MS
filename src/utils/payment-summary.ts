@@ -129,6 +129,11 @@ export const computeJobPaymentTotals = (
     finalDue = toNumber(txn?.amount);
   }
 
+  // Fold additional charges into the final/remaining payable line item.
+  if (additionalAmount > 0) {
+    finalDue += additionalAmount;
+  }
+
   if (downSatisfied && finalDue > 0) {
     if (finalPaid || fullyPaid) {
       paid += finalDue;
@@ -143,12 +148,6 @@ export const computeJobPaymentTotals = (
         amountDue: finalDue,
       });
     }
-  }
-
-  if (additionalAmount > 0 && !(finalPaid || fullyPaid)) {
-    pending += additionalAmount;
-  } else if (additionalAmount > 0 && (finalPaid || fullyPaid)) {
-    paid += additionalAmount;
   }
 
   return { pending, paid, pendingItems, paidItems };

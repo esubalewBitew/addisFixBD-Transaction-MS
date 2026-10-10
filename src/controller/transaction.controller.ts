@@ -20,6 +20,8 @@ import {
   buildChapaTxRef,
   extractCallbackTxRef,
   findTransactionByTxRef,
+  getChapaCallbackUrl,
+  getMiniAppUrl,
   verifyWithChapa,
   resolvePaymentTypeFromTxRef,
 } from "../utils/chapa";
@@ -331,11 +333,7 @@ export class TransactionController {
         user?.fullName || "AddisFix Customer"
       ).split(" ");
 
-      const miniAppUrl = (
-        process.env.MINI_APP_URL ||
-        process.env.FRONTEND_URL ||
-        "http://localhost:3000"
-      ).replace(/\/$/, "");
+      const miniAppUrl = getMiniAppUrl();
 
       const chapaPayload: Record<string, any> = {
         amount: amount?.toString() || "0",
@@ -345,7 +343,7 @@ export class TransactionController {
         phone_number: phoneNumber,
         first_name: firstName || "AddisFix",
         last_name: lastNameParts.join(" ") || "Customer",
-        callback_url: `${config._VALS.baseURL}/addisfix/transaction/chapa/callback`,
+        callback_url: getChapaCallbackUrl(),
         return_url: `${miniAppUrl}/payments/success?tx_ref=${encodeURIComponent(txRef)}`,
         customization: {
           title: "AddisFix Payment",
