@@ -43,7 +43,7 @@ async function validateDBConnection() {
     );
     res.header(
       "Access-Control-Allow-Methods",
-      "OPITIONS, GET, PUT, PATCH, POST, DELETE"
+      "OPTIONS, GET, PUT, PATCH, POST, DELETE"
     );
     next();
   });
